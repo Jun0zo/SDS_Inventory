@@ -1,4 +1,4 @@
-import { AnyItem } from '@/types/inventory';
+import { AnyItem, RackItem } from '@/types/inventory';
 import { useZoneStore } from '@/store/useZoneStore';
 import { cn } from '@/lib/cn';
 import { applyRotationWH } from '@/lib/geometry';
@@ -148,6 +148,77 @@ export function ItemView({ item, onSelect, inventory }: ItemViewProps) {
     }
   };
 
+  // Render rack cell grid visualization (view mode only)
+  const renderRackCells = () => {
+    if (item.type !== 'rack' || isEditMode) return null;
+
+    const rackItem = item as RackItem;
+
+    // Get cell data or defaults
+    const cellAvailability = rackItem.cellAvailability?.[0]; // Show floor 0
+    const cellCapacity = rackItem.cellCapacity?.[0]; // Show floor 0
+
+    if (!cellAvailability && !cellCapacity) return null;
+
+    const rows = rackItem.rows;
+    const cols = rackItem.cols;
+
+    // Calculate cell size based on item pixel dimensions
+    const cellWidth = pixelW / cols;
+    const cellHeight = pixelH / rows;
+
+    return (
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="relative w-full h-full p-1">
+          {/* Grid overlay */}
+          <div
+            className="grid gap-[1px] w-full h-full"
+            style={{
+              gridTemplateColumns: `repeat(${cols}, 1fr)`,
+              gridTemplateRows: `repeat(${rows}, 1fr)`,
+            }}
+          >
+            {Array.from({ length: rows }, (_, rowIndex) =>
+              Array.from({ length: cols }, (_, colIndex) => {
+                const isAvailable = cellAvailability?.[rowIndex]?.[colIndex] ?? true;
+                const capacity = cellCapacity?.[rowIndex]?.[colIndex] ?? 1;
+
+                return (
+                  <div
+                    key={`${rowIndex}-${colIndex}`}
+                    className={cn(
+                      'relative rounded-[2px] border flex items-center justify-center',
+                      isAvailable
+                        ? 'bg-green-500/15 border-green-500/40'
+                        : 'bg-gray-500/20 border-gray-500/50'
+                    )}
+                    style={{
+                      minWidth: `${cellWidth - 2}px`,
+                      minHeight: `${cellHeight - 2}px`,
+                    }}
+                  >
+                    {isAvailable && capacity > 1 && cellWidth > 12 && cellHeight > 12 && (
+                      <span className="text-[8px] font-bold text-green-700/70">
+                        {capacity}
+                      </span>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Floor indicator */}
+          {(cellAvailability || cellCapacity) && pixelW > 40 && pixelH > 20 && (
+            <div className="absolute top-1 right-1 bg-background/80 text-[8px] px-1 rounded border border-border">
+              Floor 1
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -224,8 +295,11 @@ export function ItemView({ item, onSelect, inventory }: ItemViewProps) {
             </div>
           )}
         </div>
+
+        {/* Rack cell grid overlay (view mode only) */}
+        {renderRackCells()}
       </div>
-      
+
     </div>
   );
 }
