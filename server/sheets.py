@@ -1,8 +1,9 @@
 """Google Sheets API integration and data parsing."""
 import httpx
 import datetime as dt
+import os
+import json
 from typing import List, Dict, Any, Optional
-from pathlib import Path
 from google.oauth2 import service_account
 from google.auth.transport.requests import Request
 from urllib.parse import quote
@@ -10,21 +11,20 @@ from urllib.parse import quote
 async def fetch_sheet_values(spreadsheet_id: str, sheet_name: str, _api_key: Optional[str] = None) -> List[List[str]]:
     """Fetch values from a Google Sheet using service account credentials.
 
-    The function reads credentials from google_sheets_credentials.json at the project root.
+    The function reads credentials from GOOGLE_SHEETS_CREDENTIALS_JSON environment variable.
     """
     # Always quote sheet names to form a valid A1 range (handles spaces and special chars)
     encoded_range = quote(f"'{sheet_name}'", safe='')
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{encoded_range}"
 
-    # Locate credentials file at project root
-    project_root = Path(__file__).resolve().parents[1]
-    creds_path = project_root / "google_sheets_credentials.json"
-
-    if not creds_path.exists():
-        raise FileNotFoundError(f"Google Sheets credentials not found at {creds_path}")
+    # Read credentials from environment variable
+    credentials_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS_JSON')
+    if not credentials_json:
+        raise ValueError("GOOGLE_SHEETS_CREDENTIALS_JSON environment variable not set")
 
     scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-    credentials = service_account.Credentials.from_service_account_file(str(creds_path), scopes=scopes)
+    credentials = service_account.Credentials.from_service_account_info(
+        json.loads(credentials_json), scopes=scopes)
     # Ensure token
     request = Request()
     credentials.refresh(request)
