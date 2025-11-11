@@ -336,11 +336,13 @@ export function Canvas() {
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = -e.deltaY * 0.001;
-      setZoom((prev) => Math.max(0.5, Math.min(2, prev + delta)));
-    }
+    e.preventDefault();
+
+    // Allow zoom with both normal scroll and Ctrl/Cmd + scroll
+    // Ctrl/Cmd + scroll is more precise
+    const sensitivity = (e.ctrlKey || e.metaKey) ? 0.001 : 0.002;
+    const delta = -e.deltaY * sensitivity;
+    setZoom((prev) => Math.max(0.5, Math.min(2, prev + delta)));
   };
 
   // Zoom control functions
