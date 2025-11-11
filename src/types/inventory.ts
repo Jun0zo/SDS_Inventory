@@ -18,6 +18,8 @@ export interface RackItem extends PlacedItem {
   w: number;
   h: number;
   floorCapacities?: number[];
+  // [floor][row][col] - true: available, false: blocked (pillar, etc)
+  cellAvailability?: boolean[][][];
 }
 
 export interface FlatItem extends PlacedItem {

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useState, useEffect } from 'react';
+import { RackGridEditor } from './rack-grid-editor';
 
 interface RackFormProps {
   item: RackItem;
@@ -180,6 +181,13 @@ export function RackForm({ item }: RackFormProps) {
           value={(item.floorCapacities || []).reduce((sum, capacity) => sum + (capacity || 0), 0)}
           readOnly
           className="bg-muted"
+        />
+      </div>
+
+      <div className="border-t pt-4">
+        <RackGridEditor
+          item={item}
+          onUpdate={(cellAvailability) => handleUpdate({ cellAvailability })}
         />
       </div>
 
