@@ -98,14 +98,10 @@ const DEFAULT_GRID: GridConfig = {
 
 const HISTORY_LIMIT = 20;
 
-// Helper to get zone selection key for a warehouse
-function getZoneKey(warehouseId: string): string {
-  return `zone_selected_${warehouseId}`;
-}
-
 // Helper to persist zone selection
 function persistZoneSelection(warehouseId: string, zone: string) {
-  localStorage.setItem(getZoneKey(warehouseId), zone);
+  const key = `zone_selected_${warehouseId}`;
+  localStorage.setItem(key, zone);
 }
 
 export const useZoneStore = create<ZoneState>((set, get) => ({
@@ -139,6 +135,9 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
     let zoneId: string | null = null;
     if (warehouseId) {
       try {
+        if (!supabase) {
+          throw new Error('Supabase client not initialized');
+        }
         const { data: zoneData, error } = await supabase
           .from('zones')
           .select('id')
@@ -271,7 +270,7 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
     // If location was changed, trigger inventory refetch
     if (updates.location && originalItem?.location !== updates.location) {
       const warehouseCode = state.currentWarehouseCode;
-      const locationToFetch = updates.location;
+      const locationToFetch = updates.location as string;
 
       if (warehouseCode && locationToFetch) {
         // Import here to avoid circular dependency

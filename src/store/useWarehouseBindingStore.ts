@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { toast } from '@/hooks/use-toast';
 import {
-  getWarehouseBinding,
   upsertWarehouseBinding,
   deleteWarehouseBinding,
   listWarehouseBindings,
@@ -105,7 +104,7 @@ export const useWarehouseBindingStore = create<State & Actions>((set, get) => ({
   async loadBinding(warehouse_code: string) {
     try {
       set({ loading: true, error: undefined });
-      const binding = await getWarehouseBinding(warehouse_code);
+      const binding = get().bindings.find(b => b.warehouse_code === warehouse_code);
 
       if (binding && binding.source_bindings) {
         // Extract source IDs from source_bindings

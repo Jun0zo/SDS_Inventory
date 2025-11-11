@@ -8,7 +8,7 @@ import {
   getLatestSnapshot,
   testConnection,
   listSnapshots,
-  Snapshot
+  type Snapshot
 } from '@/lib/etl';
 import { ingestAllData } from '@/lib/etl-extended';
 import { toast } from '@/hooks/use-toast';
@@ -93,6 +93,9 @@ export const useSyncStore = create<SyncState & SyncActions>((set) => ({
 
       // Refresh zone capacities materialized view after WMS sync
       try {
+        if (!supabase) {
+          throw new Error('Supabase client not initialized');
+        }
         await supabase.rpc('refresh_zone_capacities');
         console.log('✅ Zone capacities materialized view refreshed');
       } catch (mvError: any) {

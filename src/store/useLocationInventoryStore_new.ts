@@ -17,6 +17,9 @@ export const fetchLocationInventoryDirect = async (
   location: string
 ): Promise<LocationInventorySummary> => {
   try {
+    if (!supabase) {
+      throw new Error('Supabase client not initialized');
+    }
     const { data, error } = await supabase
       .from('location_inventory_summary_mv')
       .select('*')
@@ -61,6 +64,9 @@ export const fetchMultipleLocationsDirect = async (
   locations: string[]
 ): Promise<Record<string, LocationInventorySummary>> => {
   try {
+    if (!supabase) {
+      throw new Error('Supabase client not initialized');
+    }
     const { data, error } = await supabase
       .from('location_inventory_summary_mv')
       .select('*')
@@ -104,7 +110,7 @@ interface LocationInventoryState {
   clearCache: () => void;
 }
 
-export const useLocationInventoryStore = create<LocationInventoryState>((set) => ({
+export const useLocationInventoryStore = create<LocationInventoryState>(() => ({
   inventoryCache: new Map(),
   loading: new Set(),
 
@@ -130,6 +136,6 @@ export const useLocationInventoryStore = create<LocationInventoryState>((set) =>
   },
 
   clearCache: () => {
-    set({ inventoryCache: new Map() });
+    // No-op since we're not caching anymore
   }
 }));

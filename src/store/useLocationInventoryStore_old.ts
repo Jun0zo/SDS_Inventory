@@ -106,7 +106,7 @@ export const useLocationInventoryStore = create<LocationInventoryState>((set, ge
   },
 
   fetchMultipleLocations: async (warehouseCode: string, locations: string[], forceRefresh = false, itemType) => {
-    locations.map(location => `${warehouseCode}::${location}`);
+    // cacheKeys are not used anymore since we filter directly below
 
     // Filter out locations that are already fresh in cache
     const locationsToFetch = forceRefresh
