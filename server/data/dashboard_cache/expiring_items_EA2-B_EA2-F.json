@@ -1,0 +1,165 @@
+{
+  "cached_at": "2025-11-10T18:55:57.044643",
+  "data": [
+    {
+      "item_code": "12500579",
+      "location": null,
+      "quantity": 30000.0,
+      "valid_date": "2025-08-23",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000338",
+      "location": null,
+      "quantity": 315560.0,
+      "valid_date": "2025-11-06",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000325",
+      "location": null,
+      "quantity": 372570.0,
+      "valid_date": "2025-08-01",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    },
+    {
+      "item_code": "12000325",
+      "location": null,
+      "quantity": 372570.0,
+      "valid_date": "2025-08-01",
+      "days_until_expiry": 0,
+      "warehouse_code": null
+    }
+  ]
+}
