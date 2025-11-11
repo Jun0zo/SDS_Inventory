@@ -37,7 +37,6 @@ export const translations: Record<Language, Translations> = {
     warehouse: '창고',
     warehouses: '창고',
     zone: '구역',
-    zones: '구역',
     selectedWarehouses: '선택된 창고',
     zoneHeatmap: '구역 히트맵',
     inventoryDiscrepancies: '재고 불일치',
@@ -59,7 +58,6 @@ export const translations: Record<Language, Translations> = {
     currentStock: '현재 재고',
     dailyConsumption: '일일 소비량',
     status: '상태',
-    material: '자재',
     days: '일',
 
     // Stock Status
@@ -77,6 +75,7 @@ export const translations: Record<Language, Translations> = {
     quantity: '수량',
     stockRatio: '재고 비율',
     stockQuantity: '재고 수량',
+    material: '자재',
 
     // Production Lines
     productionLines: '생산 라인',
@@ -84,7 +83,6 @@ export const translations: Record<Language, Translations> = {
     productionLineName: '생산 라인명',
     dailyProductionCapacity: '일일 생산량',
     billOfMaterials: '자재 소모량',
-    material: '자재',
     unit: '단위',
     lineCount: '라인 수',
 
@@ -152,7 +150,6 @@ export const translations: Record<Language, Translations> = {
     warehouse: 'Warehouse',
     warehouses: 'Warehouses',
     zone: 'Zone',
-    zones: 'Zones',
     selectedWarehouses: 'Selected Warehouses',
     zoneHeatmap: 'Zone Heatmap',
     inventoryDiscrepancies: 'Inventory Discrepancies',
@@ -174,7 +171,6 @@ export const translations: Record<Language, Translations> = {
     currentStock: 'Current Stock',
     dailyConsumption: 'Daily Consumption',
     status: 'Status',
-    material: 'Material',
     days: 'days',
 
     // Stock Status
@@ -192,6 +188,7 @@ export const translations: Record<Language, Translations> = {
     quantity: 'Quantity',
     stockRatio: 'Stock Ratio',
     stockQuantity: 'Stock Quantity',
+    material: 'Material',
 
     // Production Lines
     productionLines: 'Production Lines',
@@ -199,7 +196,6 @@ export const translations: Record<Language, Translations> = {
     productionLineName: 'Production Line Name',
     dailyProductionCapacity: 'Daily Production Capacity',
     billOfMaterials: 'Bill of Materials',
-    material: 'Material',
     unit: 'Unit',
     lineCount: 'Line Count',
 

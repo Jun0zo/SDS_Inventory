@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { useServerConfig } from '@/store/useServerConfig';
 import { useSyncStore } from '@/store/useSyncStore';
-import { useWarehouseStore } from '@/store/useWarehouseStore';
 import { useSheetSourcesStore } from '@/store/useSheetSourcesStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -16,19 +15,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import type { SheetSource, ClassificationConfig } from '@/lib/etl-extended';
-import { 
-  User, 
-  Grid3X3, 
-  Settings as SettingsIcon, 
-  Sheet, 
-  Plus, 
-  Trash2, 
-  TestTube2, 
-  RefreshCw,
+import {
+  Grid3X3,
+  Settings as SettingsIcon,
+  Sheet,
+  Plus,
+  Trash2,
   Loader2,
   Edit2,
   Download,
-  X,
   FileSpreadsheet,
   Database,
 } from 'lucide-react';
@@ -42,8 +37,7 @@ interface SourceFormData {
 
 export function SettingsPage() {
   const { grid, setGrid } = useLayoutStore();
-  const { config, load } = useServerConfig();
-  const { warehouses } = useWarehouseStore();
+  const { load } = useServerConfig();
   
   // Sheet Sources management
   const {
@@ -241,14 +235,6 @@ export function SettingsPage() {
       } catch (error) {
         // Error is handled in the store
       }
-    }
-  };
-
-  const handleSaveConfig = async () => {
-    try {
-      await save(config);
-    } catch (error) {
-      // Error is handled in the store
     }
   };
 

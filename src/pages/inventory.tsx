@@ -20,8 +20,6 @@ export function InventoryPage() {
     toggleSnap,
     undo,
     redo,
-    canUndo,
-    canRedo,
     duplicateItems,
     selectedIds,
     rotateSelected,

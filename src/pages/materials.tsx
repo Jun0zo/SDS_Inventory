@@ -76,9 +76,8 @@ export default function MaterialsPage() {
   // Major categories state
   const [majorCategories, setMajorCategories] = useState<MajorCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
-  
+
   // Inline editing state
-  const [editingItemCode, setEditingItemCode] = useState<string | null>(null);
   const [savingItemCode, setSavingItemCode] = useState<string | null>(null);
   const [tempMinorCategories, setTempMinorCategories] = useState<Record<string, string>>({});
 
@@ -348,11 +347,15 @@ export default function MaterialsPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <PageHeader
-        title="Materials Management"
-        description="Manage item classifications and categories"
-        icon={<Package className="h-6 w-6" />}
-      />
+      <PageHeader>
+        <div className="flex items-center gap-4">
+          <Package className="h-6 w-6" />
+          <div>
+            <h1 className="text-2xl font-bold">Materials Management</h1>
+            <p className="text-sm text-muted-foreground">Manage item classifications and categories</p>
+          </div>
+        </div>
+      </PageHeader>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         <Card>

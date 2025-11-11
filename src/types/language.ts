@@ -36,7 +36,6 @@ export interface Translations {
   warehouse: string;
   warehouses: string;
   zone: string;
-  zones: string;
   selectedWarehouses: string;
   zoneHeatmap: string;
   inventoryDiscrepancies: string;
@@ -58,7 +57,6 @@ export interface Translations {
   currentStock: string;
   dailyConsumption: string;
   status: string;
-  material: string;
   days: string;
 
   // Stock Status
@@ -76,6 +74,7 @@ export interface Translations {
   quantity: string;
   stockRatio: string;
   stockQuantity: string;
+  material: string;
 
   // Production Lines
   productionLines: string;
@@ -83,7 +82,6 @@ export interface Translations {
   productionLineName: string;
   dailyProductionCapacity: string;
   billOfMaterials: string;
-  material: string;
   unit: string;
   lineCount: string;
 

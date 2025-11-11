@@ -9,10 +9,7 @@ import { ZoneSelector } from '@/components/zone/zone-selector';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { toast } from '@/hooks/use-toast';
 import {
-  Edit,
   AlertTriangle,
   Building2,
   Save,
@@ -20,7 +17,6 @@ import {
   Redo,
   Clock,
   RefreshCw,
-  Plus,
   Square,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -30,10 +26,6 @@ export function ZonesLayoutPage() {
     isEditMode,
     setEditMode,
     cancelEditMode,
-    grid,
-    setGrid,
-    toggleShowGrid,
-    toggleSnap,
     undo,
     redo,
     canUndo,
@@ -47,7 +39,6 @@ export function ZonesLayoutPage() {
     loading,
     lastSavedAt,
     currentZone,
-    items,
   } = useZoneStore();
 
   const { getSelectedWarehouses } = useWarehouseStore();
@@ -181,7 +172,7 @@ export function ZonesLayoutPage() {
   if (!hasZones && singleWmsWarehouse) {
     return (
       <>
-        <PageHeader sticky={false}>
+        <PageHeader>
           <div className="flex items-center gap-4">
             <div>
               <h1 className="text-xl font-semibold">Zone Layout Editor</h1>
@@ -225,7 +216,7 @@ export function ZonesLayoutPage() {
   return (
     <>
       {/* Page Context Header */}
-      <PageHeader sticky={true}>
+      <PageHeader>
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-4">
             <div>

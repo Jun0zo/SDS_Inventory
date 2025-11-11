@@ -18,6 +18,9 @@ export interface RackItem extends PlacedItem {
   w: number;
   h: number;
   floorCapacities?: number[];
+  numbering?: 'row-major' | 'col-major';
+  order?: 'asc' | 'desc';
+  perFloorLocations?: number[];
 }
 
 export interface FlatItem extends PlacedItem {
@@ -43,6 +46,11 @@ export interface Zone {
   id: string;
   code: string;
   name: string;
+  warehouse_id?: string;
+  grid?: any;
+  grid_version?: number;
+  grid_updated_at?: string;
+  updated_at?: string;
   created_by?: string;
   created_at?: string;
 }
@@ -52,6 +60,8 @@ export interface Layout {
   zone_id: string;
   version: number;
   grid: GridConfig;
+  zone_name?: string;
+  warehouse_id?: string;
   created_by?: string;
   updated_at?: string;
 }

@@ -32,7 +32,6 @@ export function WmsSyncPanel() {
     syncing,
     loading,
     currentSnapshot,
-    runSync,
     runSyncAll,
     loadLatestSnapshot,
     error
@@ -112,7 +111,6 @@ export function WmsSyncPanel() {
     );
   }
 
-  const warehouseInfo = warehouses.find(w => w.code === selectedWarehouse);
   const sheetConfig = config.warehouses[selectedWarehouse];
 
   return (

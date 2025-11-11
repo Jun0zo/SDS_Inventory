@@ -9,6 +9,7 @@ interface LayoutState {
   items: AnyItem[];
   selectedIds: string[];
   zone: string;
+  warehouseId?: string;
   grid: GridConfig;
   isEditMode: boolean;
   history: AnyItem[][];
@@ -116,9 +117,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     );
 
     // Validate updated item
-    const updatedItem = items.find((i) => i.id === id);
+    const updatedItem = items.find((i) => i.id === id) as AnyItem | undefined;
     if (updatedItem) {
-      const errors = validateItem(updatedItem, state.grid, items, id);
+      const errors = validateItem(updatedItem, state.grid, items as AnyItem[], id);
       
       if (errors.length > 0) {
         toast({
@@ -130,7 +131,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       }
     }
 
-    set({ items });
+    set({ items: items as AnyItem[] });
     get().commit();
     
     logActivity('UPDATE', { itemId: id, updates });
@@ -310,7 +311,8 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
     try {
       const result = await createOrUpdateLayout({
-        zone: state.zone,
+        warehouseId: state.warehouseId || '',
+        zoneName: state.zone,
         grid: state.grid,
         items: state.items,
       });
@@ -493,7 +495,7 @@ function getSeedItems(zone: string): AnyItem[] {
     cols: 3,
     numbering: 'col-major',
     order: 'asc',
-    perFloorLocations: true,
+    perFloorLocations: [3, 3, 3],
   };
 
   const rack2: RackItem = {
@@ -511,7 +513,7 @@ function getSeedItems(zone: string): AnyItem[] {
     cols: 3,
     numbering: 'col-major',
     order: 'asc',
-    perFloorLocations: true,
+    perFloorLocations: [3, 3, 3],
   };
 
   const flat1: FlatItem = {

@@ -32,7 +32,7 @@ const initialConfig: ServerConfig = {
   warehouses: {},
 };
 
-export const useServerConfig = create<State & Actions>((set, get) => ({
+export const useServerConfig = create<State & Actions>((set) => ({
   config: initialConfig,
   loading: false,
   saving: false,

@@ -16,7 +16,7 @@ import {
   type SlowMovingItem,
   type DiscrepancyItem,
 } from '@/lib/supabase/insights';
-import { calculateAllStockDays, calculateStockDaysByLine, getStockStatusColor, getStockStatusLabel, type StockInfo } from '@/lib/production-utils';
+import { calculateAllStockDays, calculateStockDaysByLine, getStockStatusColor, type StockInfo } from '@/lib/production-utils';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StockStatusDetailModal } from '@/components/dashboard/stock-status-detail-modal';
@@ -372,7 +372,7 @@ export function DashboardPage() {
   return (
     <>
       {/* Page Context Header */}
-      <PageHeader sticky={false}>
+      <PageHeader>
         <div className="flex items-center">
           <div>
             <h1 className="text-xl font-semibold">Dashboard</h1>

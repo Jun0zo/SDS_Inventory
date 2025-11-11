@@ -13,7 +13,7 @@ export interface LocationInventorySummary {
 
 // Direct MV query functions (no caching)
 export const fetchLocationInventoryDirect = async (
-  warehouseCode: string,
+  _warehouseCode: string,
   location: string
 ): Promise<LocationInventorySummary> => {
   try {
@@ -57,7 +57,7 @@ export const fetchLocationInventoryDirect = async (
 };
 
 export const fetchMultipleLocationsDirect = async (
-  warehouseCode: string,
+  _warehouseCode: string,
   locations: string[]
 ): Promise<Record<string, LocationInventorySummary>> => {
   try {
@@ -104,7 +104,7 @@ interface LocationInventoryState {
   clearCache: () => void;
 }
 
-export const useLocationInventoryStore = create<LocationInventoryState>((set, get) => ({
+export const useLocationInventoryStore = create<LocationInventoryState>((set) => ({
   inventoryCache: new Map(),
   loading: new Set(),
 

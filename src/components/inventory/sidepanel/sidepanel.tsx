@@ -15,7 +15,6 @@ import { calculateCapacity, calculateUtilization, getUtilizationColor, getUtiliz
 import { Package2, Package, Box } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { LocationInventoryItem } from '@/lib/etl-location';
-import { supabase } from '@/lib/supabase/client';
 import { fetchLocationInventoryDirect } from '@/store/useLocationInventoryStore';
 
 export function SidePanel() {
@@ -148,8 +147,8 @@ export function SidePanel() {
       const lotEntries = Object.entries(directMvData.lot_distribution);
       if (lotEntries.length > 0) {
         return lotEntries
-          .filter(([key, value]) => (value as number) > 0)
-          .map(([key, value], index: number) => ({
+          .filter(([, value]) => (value as number) > 0)
+          .map(([key, value]) => ({
             name: key === 'No Lot' ? 'No Lot' : key,
             value: value as number,
             payload: {
@@ -164,7 +163,7 @@ export function SidePanel() {
     if (selectedZoneData?.cachedDisplayData?.lot_distribution) {
       return selectedZoneData.cachedDisplayData.lot_distribution
         .filter((lot: any) => lot.quantity > 0)
-        .map((lot: any, index: number) => ({
+        .map((lot: any) => ({
           name: lot.lot_key || 'No Lot',
           value: lot.quantity,
           payload: {
@@ -434,7 +433,7 @@ export function SidePanel() {
                 <ScrollArea className="h-32">
                   <div className="space-y-1">
                     {selectedZoneData.component.materials.map((material: any, index: number) => (
-                      <div key={index} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
+                      <div key={`material-${index}`} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
                         <div className="flex flex-col">
                           <span className="font-medium">{material.item_code}</span>
                           {material.lot_key && (
@@ -468,7 +467,7 @@ export function SidePanel() {
                         paddingAngle={2}
                         dataKey="value"
                       >
-                        {finalLotData.map((_entry, index) => (
+                        {finalLotData.map((_entry: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -487,8 +486,8 @@ export function SidePanel() {
                 </div>
                 {/* Lot breakdown list */}
                 <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {finalLotData.map((lot, index) => (
-                    <div key={lot.name} className="flex items-center justify-between text-xs">
+                  {finalLotData.map((lot: any, index: number) => (
+                    <div key={`lot-${index}`} className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
                         <div
                           className="w-3 h-3 rounded-full"
@@ -549,7 +548,7 @@ export function SidePanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inventory?.items?.map((item) => (
+                  {inventory?.items?.map((item: any) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium whitespace-nowrap">
                         {item.item_code || '-'}
@@ -631,7 +630,7 @@ export function SidePanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inventory?.items?.map((item) => (
+                  {inventory?.items?.map((item: any) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium whitespace-nowrap">
                         {item.item_code || '-'}
@@ -752,7 +751,7 @@ export function SidePanel() {
 
           <ScrollArea className="max-h-[60vh]">
             <div className="grid gap-3 p-1">
-              {inventory?.items?.map((item) => (
+              {inventory?.items?.map((item: any) => (
                 <div
                   key={item.id}
                   className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"

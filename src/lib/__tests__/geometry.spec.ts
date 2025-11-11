@@ -3,7 +3,6 @@ import {
   getAABB,
   applyRotationWH,
   aabbsOverlap,
-  wouldCollide,
   snap,
   rotateItem,
   pointInAABB,
@@ -28,7 +27,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       const aabb = getAABB(item);
@@ -51,7 +50,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       const aabb = getAABB(item);
@@ -76,7 +75,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(applyRotationWH(item)).toEqual({ w: 6, h: 4 });
@@ -98,7 +97,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(applyRotationWH(item)).toEqual({ w: 4, h: 6 });
@@ -120,7 +119,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(applyRotationWH(item)).toEqual({ w: 4, h: 6 });
@@ -177,7 +176,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       const rotated = rotateItem(item);
@@ -200,7 +199,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       const rotated = rotateItem(item);

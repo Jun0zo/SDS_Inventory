@@ -192,7 +192,7 @@ export async function createOrUpdateLayout(params: {
 }): Promise<{ success: boolean; error?: string }> {
   const { warehouseId, zoneName, grid, items } = params;
 
-  const { data: user } = await supabase.auth.getUser();
+  await supabase.auth.getUser();
   // Note: We allow operation even if user is not authenticated (created_by will be null)
 
   // First, ensure zone exists and get zone_id
@@ -234,7 +234,7 @@ export async function createOrUpdateLayout(params: {
   }
 
   // Update zone with grid info (layouts merged into zones)
-  const { data: updatedZone, error: updateError } = await supabase
+  const { error: updateError } = await supabase
     .from('zones')
     .update({
       grid,
@@ -251,6 +251,7 @@ export async function createOrUpdateLayout(params: {
   }
 
   // Create layout object for compatibility
+  /* Commented out unused layout variable
   const layout: Layout = {
     id: updatedZone.id,
     zone_id: updatedZone.id,
@@ -261,6 +262,7 @@ export async function createOrUpdateLayout(params: {
     zone_name: updatedZone.name,
     warehouse_id: updatedZone.warehouse_id,
   };
+  */
 
   // Delete old items for this zone
   await supabase.from('items').delete().eq('zone_id', zoneId);
@@ -450,23 +452,35 @@ export async function logActivity(action: string, meta?: Record<string, any>): P
   return;
 
   try {
-    const { data: user } = await supabase.auth.getUser();
+    const { data: userData } = await supabase.auth.getUser();
 
-    // Only log activity if user is authenticated and has valid ID
-    if (!user.user?.id || typeof user.user.id !== 'string' || user.user.id.length === 0) {
-      console.warn('Cannot log activity: user not authenticated or invalid ID');
+    // Check if user exists first
+    if (!userData?.user) {
+      console.warn('Cannot log activity: user not authenticated');
       return;
     }
 
+    // Use non-null assertion since we verified user exists above
+    const user = userData.user!;
+
+    // Check if user ID is valid
+    if (!user.id || typeof user.id !== 'string' || user.id.length === 0) {
+      console.warn('Cannot log activity: invalid user ID');
+      return;
+    }
+
+    // Safe to use after checks above
+    const userId: string = user.id;
+
     const { error } = await supabase.from('activity_log').insert({
-      user_id: user.user.id,
+      user_id: userId,
       action,
       meta,
     });
 
     if (error) {
       // Ignore activity logging errors (non-critical functionality)
-      console.warn('Failed to log activity:', error.message);
+      console.warn('Failed to log activity:', error?.message || 'Unknown error');
     }
   } catch (err) {
     // Ignore activity logging errors (non-critical functionality)

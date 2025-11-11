@@ -5,8 +5,7 @@ import { validateItem, validateBounds } from '@/lib/validation';
 import {
   getLayoutByWarehouseZone,
   createOrUpdateLayout,
-  logActivity,
-  getWarehouseZones
+  logActivity
 } from '@/lib/supabase/layouts';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -109,11 +108,6 @@ function persistZoneSelection(warehouseId: string, zone: string) {
   localStorage.setItem(getZoneKey(warehouseId), zone);
 }
 
-// Helper to load zone selection
-function loadZoneSelection(warehouseId: string): string {
-  return localStorage.getItem(getZoneKey(warehouseId)) || 'F03';
-}
-
 export const useZoneStore = create<ZoneState>((set, get) => ({
   currentZone: 'F03',
   currentZoneId: null,
@@ -134,8 +128,6 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
   panToPositionCallback: null,
 
   setCurrentZone: async (zone, warehouseId, warehouseCode) => {
-    const state = get();
-
     console.log('🔄 [setCurrentZone] Setting zone:', { zone, warehouseId, warehouseCode });
 
     // Save current warehouse's zone selection
@@ -279,13 +271,14 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
     // If location was changed, trigger inventory refetch
     if (updates.location && originalItem?.location !== updates.location) {
       const warehouseCode = state.currentWarehouseCode;
+      const locationToFetch = updates.location;
 
-      if (warehouseCode) {
+      if (warehouseCode && locationToFetch) {
         // Import here to avoid circular dependency
         import('@/store/useLocationInventoryStore').then(({ useLocationInventoryStore }) => {
           const { fetchMultipleLocations } = useLocationInventoryStore.getState();
-          console.log('Refetching inventory for updated location:', updates.location);
-          fetchMultipleLocations(warehouseCode, [updates.location]);
+          console.log('Refetching inventory for updated location:', locationToFetch);
+          fetchMultipleLocations(warehouseCode, [locationToFetch]);
         }).catch(err => {
           console.error('Failed to import inventory store for refetch:', err);
         });

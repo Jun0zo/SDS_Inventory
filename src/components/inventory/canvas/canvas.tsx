@@ -29,10 +29,7 @@ export function Canvas() {
 
   const { getSelectedWarehouses } = useWarehouseStore();
   const selectedWarehouses = getSelectedWarehouses();
-  const warehouseId = selectedWarehouses.length === 1 ? selectedWarehouses[0].id : null;
   const warehouseCode = selectedWarehouses.length === 1 ? selectedWarehouses[0].code : null;
-
-  const [componentStockUpdates, setComponentStockUpdates] = useState<Record<string, number>>({});
   const [allInventoryData, setAllInventoryData] = useState<Record<string, any>>({});
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -302,7 +299,7 @@ export function Canvas() {
   };
 
   // Minimap viewport drag handlers
-  const handleMinimapMouseDown = (e: React.MouseEvent, minimapWidth: number, minimapHeight: number) => {
+  const handleMinimapMouseDown = (e: React.MouseEvent, _minimapWidth: number, _minimapHeight: number) => {
     e.preventDefault();
     e.stopPropagation();
     setIsMinimapDragging(true);

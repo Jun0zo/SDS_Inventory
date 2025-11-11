@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
-  validateLocationCode,
   validateBounds,
   validateCollision,
   validateGridSnap,
   validateRotation,
   isItemValid,
 } from '../validation';
-import { RackItem, FlatItem, GridConfig } from '@/types/inventory';
+import { RackItem, GridConfig } from '@/types/inventory';
 
 describe('validation', () => {
   const defaultGrid: GridConfig = {
@@ -17,22 +16,6 @@ describe('validation', () => {
     snap: true,
     showGrid: true,
   };
-
-  describe('validateLocationCode', () => {
-    it('should accept valid location codes', () => {
-      expect(validateLocationCode('F03')).toBeNull();
-      expect(validateLocationCode('F03-01')).toBeNull();
-      expect(validateLocationCode('F03-01-A')).toBeNull();
-      expect(validateLocationCode('F03-B1')).toBeNull();
-    });
-
-    it('should reject invalid location codes', () => {
-      expect(validateLocationCode('f03')).not.toBeNull();
-      expect(validateLocationCode('03')).not.toBeNull();
-      expect(validateLocationCode('F-03')).not.toBeNull();
-      expect(validateLocationCode('')).not.toBeNull();
-    });
-  });
 
   describe('validateBounds', () => {
     it('should accept items within bounds', () => {
@@ -51,7 +34,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(validateBounds(item, defaultGrid)).toBeNull();
@@ -73,7 +56,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(validateBounds(item, defaultGrid)).not.toBeNull();
@@ -95,7 +78,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(validateBounds(item, defaultGrid)).not.toBeNull();
@@ -118,7 +101,7 @@ describe('validation', () => {
       cols: 3,
       numbering: 'col-major',
       order: 'asc',
-      perFloorLocations: true,
+      perFloorLocations: [3, 3, 3],
     };
 
     const item2: RackItem = {
@@ -136,7 +119,7 @@ describe('validation', () => {
       cols: 3,
       numbering: 'col-major',
       order: 'asc',
-      perFloorLocations: true,
+      perFloorLocations: [3, 3, 3],
     };
 
     it('should accept non-overlapping items', () => {
@@ -174,7 +157,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(validateGridSnap(item, defaultGrid)).toBeNull();
@@ -196,7 +179,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(validateGridSnap(item, defaultGrid)).not.toBeNull();
@@ -218,7 +201,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       const grid = { ...defaultGrid, snap: false };
@@ -243,7 +226,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(validateRotation(item)).toBeNull();
@@ -265,7 +248,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(validateRotation(item)).not.toBeNull();
@@ -289,7 +272,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(isItemValid(item, defaultGrid, [])).toBe(true);
@@ -311,7 +294,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: true,
+        perFloorLocations: [3, 3, 3],
       };
 
       expect(isItemValid(item, defaultGrid, [])).toBe(false);

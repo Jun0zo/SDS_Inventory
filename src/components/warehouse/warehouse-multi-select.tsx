@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Check, ChevronsUpDown, X, Building2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { useWarehouseStore } from '@/store/useWarehouseStore';
-import { Warehouse } from '@/types/warehouse';
 
 interface WarehouseMultiSelectProps {
   className?: string;

@@ -42,7 +42,6 @@ interface WmsRawRow {
 
   // WMS Columns (used in display)
   item_code?: string;
-  cell_no?: string;
   tot_qty?: number;
   available_qty?: number;
   uld_id?: string;

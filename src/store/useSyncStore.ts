@@ -8,8 +8,7 @@ import {
   getLatestSnapshot,
   testConnection,
   listSnapshots,
-  Snapshot,
-  ApiResponse
+  Snapshot
 } from '@/lib/etl';
 import { ingestAllData } from '@/lib/etl-extended';
 import { toast } from '@/hooks/use-toast';
