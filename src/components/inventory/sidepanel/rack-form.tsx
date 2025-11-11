@@ -187,7 +187,7 @@ export function RackForm({ item }: RackFormProps) {
       <div className="border-t pt-4">
         <RackGridEditor
           item={item}
-          onUpdate={(cellAvailability) => handleUpdate({ cellAvailability })}
+          onUpdate={(updates) => handleUpdate(updates)}
         />
       </div>
 

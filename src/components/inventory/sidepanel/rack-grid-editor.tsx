@@ -11,7 +11,7 @@ function cn(...classes: (string | boolean | undefined)[]) {
 
 interface RackGridEditorProps {
   item: RackItem;
-  onUpdate: (cellAvailability: boolean[][][]) => void;
+  onUpdate: (updates: { cellAvailability?: boolean[][][]; cellCapacity?: number[][][] }) => void;
 }
 
 export function RackGridEditor({ item, onUpdate }: RackGridEditorProps) {
@@ -35,7 +35,25 @@ export function RackGridEditor({ item, onUpdate }: RackGridEditorProps) {
     );
   };
 
+  // Initialize cellCapacity if not exists (all cells capacity = 1 by default)
+  const getCellCapacity = (): number[][][] => {
+    if (item.cellCapacity &&
+        item.cellCapacity.length === item.floors &&
+        item.cellCapacity[0]?.length === item.rows &&
+        item.cellCapacity[0]?.[0]?.length === item.cols) {
+      return item.cellCapacity;
+    }
+
+    // Create new grid with all cells capacity = 1
+    return Array.from({ length: item.floors }, () =>
+      Array.from({ length: item.rows }, () =>
+        Array.from({ length: item.cols }, () => 1)
+      )
+    );
+  };
+
   const cellAvailability = getCellAvailability();
+  const cellCapacity = getCellCapacity();
 
   const toggleCell = (floor: number, row: number, col: number) => {
     const newAvailability = cellAvailability.map((f, fi) =>
@@ -45,7 +63,27 @@ export function RackGridEditor({ item, onUpdate }: RackGridEditorProps) {
           )
         : f
     );
-    onUpdate(newAvailability);
+    onUpdate({ cellAvailability: newAvailability });
+  };
+
+  const incrementCapacity = (floor: number, row: number, col: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newCapacity = cellCapacity.map((f, fi) =>
+      fi === floor
+        ? f.map((r, ri) =>
+            ri === row
+              ? r.map((c, ci) => {
+                  if (ci === col) {
+                    // Cycle: 1 → 2 → 3 → 4 → 1
+                    return c >= 4 ? 1 : c + 1;
+                  }
+                  return c;
+                })
+              : r
+          )
+        : f
+    );
+    onUpdate({ cellCapacity: newCapacity });
   };
 
   const toggleFloor = (floor: number) => {
@@ -66,7 +104,14 @@ export function RackGridEditor({ item, onUpdate }: RackGridEditorProps) {
           )
         : f
     );
-    onUpdate(newAvailability);
+    const newCapacity = cellCapacity.map((f, fi) =>
+      fi === floor
+        ? Array.from({ length: item.rows }, () =>
+            Array.from({ length: item.cols }, () => 1)
+          )
+        : f
+    );
+    onUpdate({ cellAvailability: newAvailability, cellCapacity: newCapacity });
   };
 
   const resetAll = () => {
@@ -75,12 +120,24 @@ export function RackGridEditor({ item, onUpdate }: RackGridEditorProps) {
         Array.from({ length: item.cols }, () => true)
       )
     );
-    onUpdate(newAvailability);
+    const newCapacity = Array.from({ length: item.floors }, () =>
+      Array.from({ length: item.rows }, () =>
+        Array.from({ length: item.cols }, () => 1)
+      )
+    );
+    onUpdate({ cellAvailability: newAvailability, cellCapacity: newCapacity });
   };
 
   const getAvailableCount = (floor: number) => {
     return cellAvailability[floor]?.reduce(
       (sum, row) => sum + row.filter(cell => cell).length,
+      0
+    ) || 0;
+  };
+
+  const getTotalCapacity = (floor: number) => {
+    return cellCapacity[floor]?.reduce(
+      (sum, row) => sum + row.reduce((rowSum, cap) => rowSum + cap, 0),
       0
     ) || 0;
   };
@@ -101,12 +158,16 @@ export function RackGridEditor({ item, onUpdate }: RackGridEditorProps) {
             <ChevronRight className="h-4 w-4" />
           )}
           <Grid3x3 className="h-4 w-4" />
-          <span className="text-sm text-muted-foreground">Cell Availability Editor</span>
+          <span className="text-sm text-muted-foreground">Cell Availability & Capacity</span>
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-3 pt-2">
-        <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
-          Click cells to toggle availability. Green = available, Gray = blocked (pillar, etc.)
+        <div className="text-xs text-muted-foreground bg-muted p-2 rounded space-y-1">
+          <div>• Click cell background: toggle availability (green/gray)</div>
+          <div>• Click cell number: change capacity (1→2→3→4→1)</div>
+          <div className="text-[10px] mt-1 opacity-80">
+            Capacity ≥2: counts actual items | Capacity =1: counts as 1 (ignores ULDs)
+          </div>
         </div>
 
         <div className="flex justify-between items-center">
@@ -127,6 +188,7 @@ export function RackGridEditor({ item, onUpdate }: RackGridEditorProps) {
             const isExpanded = expandedFloors.has(floorIndex);
             const availableCount = getAvailableCount(floorIndex);
             const totalCells = getTotalCells();
+            const totalCapacity = getTotalCapacity(floorIndex);
 
             return (
               <div key={floorIndex} className="border rounded-md">
@@ -144,9 +206,10 @@ export function RackGridEditor({ item, onUpdate }: RackGridEditorProps) {
                       Floor {floorIndex + 1}
                     </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {availableCount}/{totalCells} available
-                  </span>
+                  <div className="flex gap-3 text-xs text-muted-foreground">
+                    <span>{availableCount}/{totalCells} available</span>
+                    <span className="font-medium">Max: {totalCapacity}</span>
+                  </div>
                 </button>
 
                 {isExpanded && (
@@ -167,28 +230,37 @@ export function RackGridEditor({ item, onUpdate }: RackGridEditorProps) {
                       className="grid gap-1 mx-auto"
                       style={{
                         gridTemplateColumns: `repeat(${item.cols}, minmax(0, 1fr))`,
-                        maxWidth: `${item.cols * 24 + (item.cols - 1) * 4}px`,
+                        maxWidth: `${item.cols * 28 + (item.cols - 1) * 4}px`,
                       }}
                     >
                       {Array.from({ length: item.rows }, (_, rowIndex) =>
                         Array.from({ length: item.cols }, (_, colIndex) => {
                           const isAvailable = cellAvailability[floorIndex]?.[rowIndex]?.[colIndex] ?? true;
+                          const capacity = cellCapacity[floorIndex]?.[rowIndex]?.[colIndex] ?? 1;
 
                           return (
                             <button
                               key={`${rowIndex}-${colIndex}`}
                               onClick={() => toggleCell(floorIndex, rowIndex, colIndex)}
                               className={cn(
-                                'aspect-square rounded border-2 transition-all hover:scale-110',
+                                'relative aspect-square rounded border-2 transition-all hover:scale-105',
                                 isAvailable
                                   ? 'bg-green-500/20 border-green-500 hover:bg-green-500/30'
                                   : 'bg-gray-500/20 border-gray-500 hover:bg-gray-500/30'
                               )}
-                              title={`Row ${rowIndex + 1}, Col ${colIndex + 1}: ${isAvailable ? 'Available' : 'Blocked'}`}
+                              title={`Row ${rowIndex + 1}, Col ${colIndex + 1}: ${isAvailable ? 'Available' : 'Blocked'} | Capacity: ${capacity}`}
                             >
-                              <span className="sr-only">
-                                {isAvailable ? 'Available' : 'Blocked'}
-                              </span>
+                              {isAvailable && (
+                                <span
+                                  onClick={(e) => incrementCapacity(floorIndex, rowIndex, colIndex, e)}
+                                  className={cn(
+                                    'absolute inset-0 flex items-center justify-center text-[10px] font-bold cursor-pointer hover:bg-green-500/20 rounded',
+                                    capacity > 1 ? 'text-green-700' : 'text-green-600/60'
+                                  )}
+                                >
+                                  {capacity}
+                                </span>
+                              )}
                             </button>
                           );
                         })

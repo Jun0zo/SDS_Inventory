@@ -20,6 +20,10 @@ export interface RackItem extends PlacedItem {
   floorCapacities?: number[];
   // [floor][row][col] - true: available, false: blocked (pillar, etc)
   cellAvailability?: boolean[][][];
+  // [floor][row][col] - how many items can be stored in each cell (default: 1)
+  // If >= 2: count actual items and add to current_stock
+  // If = 1: count as 1 regardless of ULDs
+  cellCapacity?: number[][][];
 }
 
 export interface FlatItem extends PlacedItem {
