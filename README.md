@@ -347,8 +347,15 @@ Implement these methods in `src/store/useLayoutStore.ts` for your specific WMS.
 
 The FastAPI backend can be deployed to Google Cloud Run for scalable, containerized hosting.
 
-**Quick Start:**
+**Deployment Options:**
 
+🤖 **Auto-deploy (GitHub Actions)** - Recommended
+```bash
+git push origin main  # Automatically deploys to Cloud Run
+```
+Setup guide: [GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md)
+
+🔧 **Manual deploy (Local script)**
 ```bash
 # Set environment variables
 export PROJECT_ID=your-gcp-project-id
@@ -367,8 +374,9 @@ export FRONTEND_URL=https://your-frontend.vercel.app
 - HTTPS endpoint with custom domain support
 - Environment-based configuration (PORT, CORS, etc.)
 
-**Detailed Guide:**
-See [CLOUD_RUN_DEPLOYMENT.md](CLOUD_RUN_DEPLOYMENT.md) for comprehensive deployment instructions.
+**Detailed Guides:**
+- Manual deployment: [CLOUD_RUN_DEPLOYMENT.md](CLOUD_RUN_DEPLOYMENT.md)
+- Auto deployment: [GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md)
 
 **Important Notes:**
 - ⚠️ Files in `server/data/` are temporary and will be deleted on container restart

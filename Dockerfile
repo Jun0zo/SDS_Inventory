@@ -10,11 +10,11 @@ COPY server/requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy server directory
-COPY server/ ./server/
+# Copy server directory contents directly to /app
+COPY server/ .
 
 # Create data directory for temporary storage
-RUN mkdir -p /app/server/data
+RUN mkdir -p /app/data
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -25,4 +25,4 @@ EXPOSE 8080
 
 # Run the application
 # Cloud Run will provide PORT environment variable
-CMD exec uvicorn server.app:app --host 0.0.0.0 --port ${PORT}
+CMD exec uvicorn app:app --host 0.0.0.0 --port ${PORT}
