@@ -24,6 +24,8 @@ dist-ssr
 *.sw?
 
 # Environment variables
-# .env
-# .env.local
-# .env.production
+.env
+.env.local
+.env.production
+
+google_sheets_credentials.json
