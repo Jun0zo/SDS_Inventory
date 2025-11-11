@@ -1,0 +1,58 @@
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Frontend build output
+dist/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+.pytest_cache/
+
+# Git
+.git/
+.gitignore
+
+# Environment variables (will be set in Cloud Run)
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Development files
+.prettierrc
+.eslintrc*
+tsconfig.json
+vite.config.ts
+
+# Vercel
+.vercel/
+vercel.json
+
+# Other
+.DS_Store
+*.log
+coverage/
+.coverage

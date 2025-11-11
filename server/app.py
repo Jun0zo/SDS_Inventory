@@ -216,4 +216,8 @@ async def test_connection(req: SyncRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8787, reload=True)
+    import os
+
+    # Use PORT environment variable (for Cloud Run) or default to 8787 (for local dev)
+    port = int(os.getenv("PORT", "8787"))
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=True)

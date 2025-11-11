@@ -192,9 +192,6 @@ export async function createOrUpdateLayout(params: {
 }): Promise<{ success: boolean; error?: string }> {
   const { warehouseId, zoneName, grid, items } = params;
 
-  await supabase.auth.getUser();
-  // Note: We allow operation even if user is not authenticated (created_by will be null)
-
   // First, ensure zone exists and get zone_id
   let zoneId: string;
   const { data: existingZone, error: zoneError } = await supabase
@@ -524,14 +521,11 @@ export async function getOrCreateZone(code: string, name?: string): Promise<Zone
 
   // Create new zone if not found
   if (fetchError?.code === 'PGRST116') {
-    const { data: user } = await supabase.auth.getUser();
-    
     const { data: newZone, error: createError } = await supabase
       .from('zones')
       .insert({
         code,
         name: name || code,
-        created_by: user.user?.id,
       })
       .select()
       .single();
