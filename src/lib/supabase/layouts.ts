@@ -336,7 +336,9 @@ export async function createOrUpdateLayout(params: {
 
     if (warehouse) {
       // Update zone_capacities.json via server API
-      const BASE_URL = import.meta.env.VITE_ETL_BASE_URL || 'http://localhost:8787';
+      // Use relative path in production (Vercel), localhost in development
+      const BASE_URL = import.meta.env.VITE_ETL_BASE_URL 
+        || (import.meta.env.PROD ? '' : 'http://localhost:8787');
       const response = await fetch(
         `${BASE_URL}/api/zones/capacities/update?warehouse_codes=${encodeURIComponent(warehouse.code)}`,
         { method: 'POST' }

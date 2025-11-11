@@ -2,7 +2,9 @@
  * ETL Server API client for Google Sheets integration
  */
 
-const BASE_URL = import.meta.env.VITE_ETL_BASE_URL || 'http://localhost:8787';
+// Use relative path in production (Vercel), localhost in development
+const BASE_URL = import.meta.env.VITE_ETL_BASE_URL 
+  || (import.meta.env.PROD ? '' : 'http://localhost:8787');
 
 export interface WarehouseSheet {
   spreadsheet_id: string;

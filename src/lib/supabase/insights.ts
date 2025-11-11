@@ -1,6 +1,8 @@
 import { supabase } from './client';
 
-const BASE_URL = import.meta.env.VITE_ETL_BASE_URL || 'http://localhost:8787';
+// Use relative path in production (Vercel), localhost in development
+const BASE_URL = import.meta.env.VITE_ETL_BASE_URL 
+  || (import.meta.env.PROD ? '' : 'http://localhost:8787');
 
 // Quantity column mapping (Google Sheet header → PostgreSQL column)
 const WMS_QUANTITY_MAP: Record<string, string> = {
