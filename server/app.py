@@ -1,5 +1,6 @@
 """Main FastAPI application with routes."""
 import datetime
+import httpx
 from fastapi import HTTPException
 from config import create_app
 from models import ServerConfig, SyncRequest, ApiResponse
