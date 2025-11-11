@@ -28,4 +28,7 @@ dist-ssr
 .env.local
 .env.production
 
+# Credentials
+google_sheets_credentials.json
+
 google_sheets_credentials.json
