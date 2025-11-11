@@ -1,0 +1,38 @@
+{
+  "af06f05e-1098-4464-8c80-1b9aa62045bc": {
+    "zone_id": "af06f05e-1098-4464-8c80-1b9aa62045bc",
+    "zone_code": "test-zone",
+    "zone_name": "Test Zone",
+    "max_capacity": 0,
+    "item_count": 0,
+    "components": [],
+    "grid": {
+      "cols": 80,
+      "rows": 50,
+      "snap": true,
+      "cellPx": 24,
+      "showGrid": true
+    },
+    "last_updated": "2025-11-10T23:41:38.897723",
+    "current_stock": 0,
+    "utilization_percentage": 0.0
+  },
+  "e8f06849-ee7a-4cd8-9ff8-1406cda78471": {
+    "zone_id": "e8f06849-ee7a-4cd8-9ff8-1406cda78471",
+    "zone_code": "F-zone",
+    "zone_name": null,
+    "max_capacity": 0,
+    "item_count": 0,
+    "components": [],
+    "grid": {
+      "cols": 80,
+      "rows": 50,
+      "snap": true,
+      "cellPx": 24,
+      "showGrid": true
+    },
+    "last_updated": "2025-11-10T23:41:38.897711",
+    "current_stock": 0,
+    "utilization_percentage": 0.0
+  }
+}

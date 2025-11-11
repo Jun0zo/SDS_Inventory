@@ -1,0 +1,11 @@
+{
+  "cached_at": "2025-11-10T02:46:10.173858",
+  "data": {
+    "total_quantity": 94612149.3,
+    "unique_items": 65,
+    "wms_quantity": 83792147.0,
+    "sap_quantity": 10820002.3,
+    "available_quantity": 94612149.3,
+    "last_updated": "2025-11-10T02:46:10.173624"
+  }
+}

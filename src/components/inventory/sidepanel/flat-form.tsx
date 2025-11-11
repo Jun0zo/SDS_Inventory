@@ -1,0 +1,130 @@
+import { FlatItem } from '@/types/inventory';
+import { useZoneStore } from '@/store/useZoneStore';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { useCallback, useState, useEffect } from 'react';
+
+interface FlatFormProps {
+  item: FlatItem;
+}
+
+export function FlatForm({ item }: FlatFormProps) {
+  const { updateItem, removeItem } = useZoneStore();
+  const [localLocation, setLocalLocation] = useState(item.location);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+
+  const handleUpdate = useCallback((updates: Partial<FlatItem>) => {
+    updateItem(item.id, updates);
+  }, [updateItem, item.id]);
+
+  // Sync local state with item prop
+  useEffect(() => {
+    setLocalLocation(item.location);
+  }, [item.location]);
+
+  const handleLocationBlur = () => {
+    if (localLocation !== item.location) {
+      handleUpdate({ location: localLocation });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="location">Location Code</Label>
+        <Input
+          id="location"
+          value={localLocation}
+          onChange={(e) => setLocalLocation(e.target.value)}
+          onBlur={handleLocationBlur}
+        />
+      </div>
+
+      <Collapsible open={isAdvancedOpen} onOpenChange={setIsAdvancedOpen}>
+        <CollapsibleTrigger asChild>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="flex items-center gap-2 w-full justify-start px-0 hover:bg-transparent"
+          >
+            {isAdvancedOpen ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+            <span className="text-sm text-muted-foreground">Advanced Settings</span>
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-4 pt-2">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="x">X Position</Label>
+              <Input
+                id="x"
+                type="number"
+                value={item.x}
+                onChange={(e) => handleUpdate({ x: parseInt(e.target.value) })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="y">Y Position</Label>
+              <Input
+                id="y"
+                type="number"
+                value={item.y}
+                onChange={(e) => handleUpdate({ y: parseInt(e.target.value) })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="w">Width</Label>
+              <Input
+                id="w"
+                type="number"
+                value={item.w}
+                onChange={(e) => handleUpdate({ w: parseInt(e.target.value) })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="h">Height</Label>
+              <Input
+                id="h"
+                type="number"
+                value={item.h}
+                onChange={(e) => handleUpdate({ h: parseInt(e.target.value) })}
+              />
+            </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+
+
+      <div>
+        <Label htmlFor="maxCapacity">Max Capacity</Label>
+        <Input
+          id="maxCapacity"
+          type="number"
+          min="0"
+          value={item.maxCapacity || ''}
+          onChange={(e) => handleUpdate({ maxCapacity: parseInt(e.target.value) || 0 })}
+        />
+      </div>
+
+      <div className="border-t pt-4">
+        <Button
+          variant="destructive"
+          onClick={() => removeItem(item.id)}
+          className="w-full"
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete
+        </Button>
+      </div>
+    </div>
+  );
+}
