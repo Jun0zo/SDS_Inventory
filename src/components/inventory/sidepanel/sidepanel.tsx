@@ -11,17 +11,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RackForm } from './rack-form';
 import { FlatForm } from './flat-form';
+import { RackGridEditor } from './rack-grid-editor';
 import { calculateCapacity, calculateUtilization, getUtilizationColor, getUtilizationStatus } from '@/lib/capacity';
-import { Package2, Package, Box } from 'lucide-react';
+import { Package2, Package, Box, Eye } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { LocationInventoryItem } from '@/lib/etl-location';
 import { supabase } from '@/lib/supabase/client';
 import { fetchLocationInventoryDirect } from '@/store/useLocationInventoryStore';
 
 export function SidePanel() {
-  const { items, selectedIds, isEditMode, dataVersion } = useZoneStore();
+  const { items, selectedIds, isEditMode, dataVersion, updateItem } = useZoneStore();
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [rackGridViewOpen, setRackGridViewOpen] = useState(false);
   const [componentStockUpdates, setComponentStockUpdates] = useState<Record<string, number>>({});
   const [zoneCapacities, setZoneCapacities] = useState<any[]>([]);
 
@@ -509,9 +511,23 @@ export function SidePanel() {
               </div>
             </ScrollArea>
             
+            {/* Rack Grid View Button (for rack items) */}
+            {selectedItem.type === 'rack' && (
+              <div className="p-6 pt-0 pb-3">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setRackGridViewOpen(true)}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  View Rack Grid
+                </Button>
+              </div>
+            )}
+
             {/* Toggle Item List Button */}
             {inventory && inventory.items && inventory.items.length > 0 && (
-              <div className="p-6 pt-0">
+              <div className={`p-6 ${selectedItem.type === 'rack' ? 'pt-0' : 'pt-0'}`}>
                 <Button
                   variant="outline"
                   className="w-full"
@@ -579,6 +595,24 @@ export function SidePanel() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Rack Grid View Modal */}
+        {selectedItem.type === 'rack' && (
+          <Dialog open={rackGridViewOpen} onOpenChange={setRackGridViewOpen}>
+            <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Rack View - {selectedItem.location}</DialogTitle>
+              </DialogHeader>
+              <RackGridEditor
+                item={selectedItem}
+                mode="view"
+                onUpdate={(updates) => {
+                  updateItem(selectedItem.id, updates);
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
       </>
     );
   }

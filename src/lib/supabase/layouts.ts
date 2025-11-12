@@ -165,6 +165,9 @@ export async function getLayoutByWarehouseZone(
         order: dbItem.order_dir,
         perFloorLocations: dbItem.per_floor_locations,
         floorCapacities: dbItem.floor_capacities || undefined,
+        cellAvailability: dbItem.cell_availability || undefined,
+        cellCapacity: dbItem.cell_capacity || undefined,
+        pillarAvailability: dbItem.pillar_availability || undefined,
       } as AnyItem;
     } else {
       return {
@@ -291,6 +294,9 @@ export async function createOrUpdateLayout(params: {
           order_dir: item.order,
           per_floor_locations: item.perFloorLocations,
           floor_capacities: item.floorCapacities || null,
+          cell_availability: item.cellAvailability || null,
+          cell_capacity: item.cellCapacity || null,
+          pillar_availability: item.pillarAvailability || null,
         };
       }
 
@@ -607,6 +613,9 @@ export async function getLayoutByZone(zoneCode: string): Promise<{ layout: Layou
         order: dbItem.order_dir,
         perFloorLocations: dbItem.per_floor_locations,
         floorCapacities: dbItem.floor_capacities || undefined,
+        cellAvailability: dbItem.cell_availability || undefined,
+        cellCapacity: dbItem.cell_capacity || undefined,
+        pillarAvailability: dbItem.pillar_availability || undefined,
       } as AnyItem;
     } else {
       return {

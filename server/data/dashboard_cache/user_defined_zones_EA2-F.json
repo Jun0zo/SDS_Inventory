@@ -1,16 +1,16 @@
 {
-  "cached_at": "2025-11-11T04:45:18.478049",
+  "cached_at": "2025-11-12T22:24:48.272863",
   "data": [
     {
-      "zone_id": "af06f05e-1098-4464-8c80-1b9aa62045bc",
-      "zone_code": "test-zone",
-      "zone_name": "Test Zone",
+      "zone_id": "66a98e4d-02e1-498d-89ed-64572dae7fc6",
+      "zone_code": "F-zone",
+      "zone_name": null,
       "warehouse_code": "EA2-F",
-      "current_quantity": 158,
-      "total_capacity": 143,
+      "current_quantity": 68,
+      "total_capacity": 48,
       "utilization_percentage": 100,
-      "avg_location_utilization": 73.45,
-      "item_count": 4
+      "avg_location_utilization": 50.0,
+      "item_count": 2
     }
   ]
 }

@@ -73,6 +73,9 @@ CREATE TABLE public.items (
   per_floor_locations BOOLEAN,
   max_capacity INT, -- flat 타입용
   floor_capacities JSONB, -- rack 타입용
+  cell_capacity JSONB, -- rack 셀별 용량 정보
+  cell_availability JSONB, -- rack 셀별 가용성 정보
+  pillar_availability JSONB, -- rack 기둥 가용성 정보
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

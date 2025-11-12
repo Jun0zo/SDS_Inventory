@@ -24,6 +24,9 @@ export interface RackItem extends PlacedItem {
   // If >= 2: count actual items and add to current_stock
   // If = 1: count as 1 regardless of ULDs
   cellCapacity?: number[][][];
+  // [pillar] - true: pillar exists, false: no pillar (cols+1 pillars, shared across all floors)
+  // Pillars are positioned between cells (including both ends)
+  pillarAvailability?: boolean[];
 }
 
 export interface FlatItem extends PlacedItem {
