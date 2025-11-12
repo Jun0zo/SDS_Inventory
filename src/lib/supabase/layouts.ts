@@ -165,6 +165,9 @@ export async function getLayoutByWarehouseZone(
         order: dbItem.order_dir,
         perFloorLocations: dbItem.per_floor_locations,
         floorCapacities: dbItem.floor_capacities || undefined,
+        cellAvailability: dbItem.cell_availability || undefined,
+        cellCapacity: dbItem.cell_capacity || undefined,
+        pillarAvailability: dbItem.pillar_availability || undefined,
       } as AnyItem;
     } else {
       return {
@@ -191,6 +194,9 @@ export async function createOrUpdateLayout(params: {
   items: AnyItem[];
 }): Promise<{ success: boolean; error?: string }> {
   const { warehouseId, zoneName, grid, items } = params;
+
+  const { data: user } = await supabase.auth.getUser();
+  // Note: We allow operation even if user is not authenticated (created_by will be null)
 
   // First, ensure zone exists and get zone_id
   let zoneId: string;
@@ -231,7 +237,7 @@ export async function createOrUpdateLayout(params: {
   }
 
   // Update zone with grid info (layouts merged into zones)
-  const { error: updateError } = await supabase
+  const { data: updatedZone, error: updateError } = await supabase
     .from('zones')
     .update({
       grid,
@@ -248,7 +254,6 @@ export async function createOrUpdateLayout(params: {
   }
 
   // Create layout object for compatibility
-  /* Commented out unused layout variable
   const layout: Layout = {
     id: updatedZone.id,
     zone_id: updatedZone.id,
@@ -259,7 +264,6 @@ export async function createOrUpdateLayout(params: {
     zone_name: updatedZone.name,
     warehouse_id: updatedZone.warehouse_id,
   };
-  */
 
   // Delete old items for this zone
   await supabase.from('items').delete().eq('zone_id', zoneId);
@@ -290,6 +294,9 @@ export async function createOrUpdateLayout(params: {
           order_dir: item.order,
           per_floor_locations: item.perFloorLocations,
           floor_capacities: item.floorCapacities || null,
+          cell_availability: item.cellAvailability || null,
+          cell_capacity: item.cellCapacity || null,
+          pillar_availability: item.pillarAvailability || null,
         };
       }
 
@@ -336,9 +343,7 @@ export async function createOrUpdateLayout(params: {
 
     if (warehouse) {
       // Update zone_capacities.json via server API
-      // Use relative path in production (Vercel), localhost in development
-      const BASE_URL = import.meta.env.VITE_ETL_BASE_URL 
-        || (import.meta.env.PROD ? '' : 'http://localhost:8787');
+      const BASE_URL = import.meta.env.VITE_ETL_BASE_URL || 'http://localhost:8787';
       const response = await fetch(
         `${BASE_URL}/api/zones/capacities/update?warehouse_codes=${encodeURIComponent(warehouse.code)}`,
         { method: 'POST' }
@@ -451,35 +456,23 @@ export async function logActivity(action: string, meta?: Record<string, any>): P
   return;
 
   try {
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: user } = await supabase.auth.getUser();
 
-    // Check if user exists first
-    if (!userData?.user) {
-      console.warn('Cannot log activity: user not authenticated');
+    // Only log activity if user is authenticated and has valid ID
+    if (!user.user?.id || typeof user.user.id !== 'string' || user.user.id.length === 0) {
+      console.warn('Cannot log activity: user not authenticated or invalid ID');
       return;
     }
-
-    // Use non-null assertion since we verified user exists above
-    const user = userData.user!;
-
-    // Check if user ID is valid
-    if (!user.id || typeof user.id !== 'string' || user.id.length === 0) {
-      console.warn('Cannot log activity: invalid user ID');
-      return;
-    }
-
-    // Safe to use after checks above
-    const userId: string = user.id;
 
     const { error } = await supabase.from('activity_log').insert({
-      user_id: userId,
+      user_id: user.user.id,
       action,
       meta,
     });
 
     if (error) {
       // Ignore activity logging errors (non-critical functionality)
-      console.warn('Failed to log activity:', error?.message || 'Unknown error');
+      console.warn('Failed to log activity:', error.message);
     }
   } catch (err) {
     // Ignore activity logging errors (non-critical functionality)
@@ -523,11 +516,14 @@ export async function getOrCreateZone(code: string, name?: string): Promise<Zone
 
   // Create new zone if not found
   if (fetchError?.code === 'PGRST116') {
+    const { data: user } = await supabase.auth.getUser();
+    
     const { data: newZone, error: createError } = await supabase
       .from('zones')
       .insert({
         code,
         name: name || code,
+        created_by: user.user?.id,
       })
       .select()
       .single();
@@ -617,6 +613,9 @@ export async function getLayoutByZone(zoneCode: string): Promise<{ layout: Layou
         order: dbItem.order_dir,
         perFloorLocations: dbItem.per_floor_locations,
         floorCapacities: dbItem.floor_capacities || undefined,
+        cellAvailability: dbItem.cell_availability || undefined,
+        cellCapacity: dbItem.cell_capacity || undefined,
+        pillarAvailability: dbItem.pillar_availability || undefined,
       } as AnyItem;
     } else {
       return {

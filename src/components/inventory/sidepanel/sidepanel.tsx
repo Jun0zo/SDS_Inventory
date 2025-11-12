@@ -11,16 +11,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RackForm } from './rack-form';
 import { FlatForm } from './flat-form';
+import { RackGridEditor } from './rack-grid-editor';
 import { calculateCapacity, calculateUtilization, getUtilizationColor, getUtilizationStatus } from '@/lib/capacity';
-import { Package2, Package, Box } from 'lucide-react';
+import { Package2, Package, Box, Eye } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { LocationInventoryItem } from '@/lib/etl-location';
+import { supabase } from '@/lib/supabase/client';
 import { fetchLocationInventoryDirect } from '@/store/useLocationInventoryStore';
 
 export function SidePanel() {
-  const { items, selectedIds, isEditMode, dataVersion } = useZoneStore();
+  const { items, selectedIds, isEditMode, dataVersion, updateItem } = useZoneStore();
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [rackGridViewOpen, setRackGridViewOpen] = useState(false);
   const [componentStockUpdates, setComponentStockUpdates] = useState<Record<string, number>>({});
   const [zoneCapacities, setZoneCapacities] = useState<any[]>([]);
 
@@ -147,8 +150,8 @@ export function SidePanel() {
       const lotEntries = Object.entries(directMvData.lot_distribution);
       if (lotEntries.length > 0) {
         return lotEntries
-          .filter(([, value]) => (value as number) > 0)
-          .map(([key, value]) => ({
+          .filter(([key, value]) => (value as number) > 0)
+          .map(([key, value], index: number) => ({
             name: key === 'No Lot' ? 'No Lot' : key,
             value: value as number,
             payload: {
@@ -163,7 +166,7 @@ export function SidePanel() {
     if (selectedZoneData?.cachedDisplayData?.lot_distribution) {
       return selectedZoneData.cachedDisplayData.lot_distribution
         .filter((lot: any) => lot.quantity > 0)
-        .map((lot: any) => ({
+        .map((lot: any, index: number) => ({
           name: lot.lot_key || 'No Lot',
           value: lot.quantity,
           payload: {
@@ -433,7 +436,7 @@ export function SidePanel() {
                 <ScrollArea className="h-32">
                   <div className="space-y-1">
                     {selectedZoneData.component.materials.map((material: any, index: number) => (
-                      <div key={`material-${index}`} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
+                      <div key={index} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
                         <div className="flex flex-col">
                           <span className="font-medium">{material.item_code}</span>
                           {material.lot_key && (
@@ -467,7 +470,7 @@ export function SidePanel() {
                         paddingAngle={2}
                         dataKey="value"
                       >
-                        {finalLotData.map((_entry: any, index: number) => (
+                        {finalLotData.map((_entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -486,8 +489,8 @@ export function SidePanel() {
                 </div>
                 {/* Lot breakdown list */}
                 <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {finalLotData.map((lot: any, index: number) => (
-                    <div key={`lot-${index}`} className="flex items-center justify-between text-xs">
+                  {finalLotData.map((lot, index) => (
+                    <div key={lot.name} className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
                         <div
                           className="w-3 h-3 rounded-full"
@@ -508,9 +511,23 @@ export function SidePanel() {
               </div>
             </ScrollArea>
             
+            {/* Rack Grid View Button (for rack items) */}
+            {selectedItem.type === 'rack' && (
+              <div className="p-6 pt-0 pb-3">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setRackGridViewOpen(true)}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  View Rack Grid
+                </Button>
+              </div>
+            )}
+
             {/* Toggle Item List Button */}
             {inventory && inventory.items && inventory.items.length > 0 && (
-              <div className="p-6 pt-0">
+              <div className={`p-6 ${selectedItem.type === 'rack' ? 'pt-0' : 'pt-0'}`}>
                 <Button
                   variant="outline"
                   className="w-full"
@@ -548,7 +565,7 @@ export function SidePanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inventory?.items?.map((item: any) => (
+                  {inventory?.items?.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium whitespace-nowrap">
                         {item.item_code || '-'}
@@ -578,6 +595,24 @@ export function SidePanel() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Rack Grid View Modal */}
+        {selectedItem.type === 'rack' && (
+          <Dialog open={rackGridViewOpen} onOpenChange={setRackGridViewOpen}>
+            <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Rack View - {selectedItem.location}</DialogTitle>
+              </DialogHeader>
+              <RackGridEditor
+                item={selectedItem}
+                mode="view"
+                onUpdate={(updates) => {
+                  updateItem(selectedItem.id, updates);
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
       </>
     );
   }
@@ -630,7 +665,7 @@ export function SidePanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inventory?.items?.map((item: any) => (
+                  {inventory?.items?.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium whitespace-nowrap">
                         {item.item_code || '-'}
@@ -751,7 +786,7 @@ export function SidePanel() {
 
           <ScrollArea className="max-h-[60vh]">
             <div className="grid gap-3 p-1">
-              {inventory?.items?.map((item: any) => (
+              {inventory?.items?.map((item) => (
                 <div
                   key={item.id}
                   className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"

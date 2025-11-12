@@ -18,9 +18,15 @@ export interface RackItem extends PlacedItem {
   w: number;
   h: number;
   floorCapacities?: number[];
-  numbering?: 'row-major' | 'col-major';
-  order?: 'asc' | 'desc';
-  perFloorLocations?: number[];
+  // [floor][row][col] - true: available, false: blocked (pillar, etc)
+  cellAvailability?: boolean[][][];
+  // [floor][row][col] - how many items can be stored in each cell (default: 1)
+  // If >= 2: count actual items and add to current_stock
+  // If = 1: count as 1 regardless of ULDs
+  cellCapacity?: number[][][];
+  // [pillar] - true: pillar exists, false: no pillar (cols+1 pillars, shared across all floors)
+  // Pillars are positioned between cells (including both ends)
+  pillarAvailability?: boolean[];
 }
 
 export interface FlatItem extends PlacedItem {
@@ -46,11 +52,6 @@ export interface Zone {
   id: string;
   code: string;
   name: string;
-  warehouse_id?: string;
-  grid?: any;
-  grid_version?: number;
-  grid_updated_at?: string;
-  updated_at?: string;
   created_by?: string;
   created_at?: string;
 }
@@ -60,8 +61,6 @@ export interface Layout {
   zone_id: string;
   version: number;
   grid: GridConfig;
-  zone_name?: string;
-  warehouse_id?: string;
   created_by?: string;
   updated_at?: string;
 }
