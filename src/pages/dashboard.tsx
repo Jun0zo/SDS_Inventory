@@ -21,6 +21,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StockStatusDetailModal } from '@/components/dashboard/stock-status-detail-modal';
 import { StockDaysDetailModal } from '@/components/dashboard/stock-days-detail-modal';
+import { ExpiringItemsDetailModal } from '@/components/dashboard/expiring-items-detail-modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -136,6 +137,7 @@ export function DashboardPage() {
   const [discrepancyTab, setDiscrepancyTab] = useState<'diff' | 'no_diff'>('diff');
   const [stockStatusModalOpen, setStockStatusModalOpen] = useState(false);
   const [stockDaysModalOpen, setStockDaysModalOpen] = useState(false);
+  const [expiringItemsModalOpen, setExpiringItemsModalOpen] = useState(false);
   
   // Insights data state
   const [inventoryStats, setInventoryStats] = useState({
@@ -906,11 +908,18 @@ export function DashboardPage() {
           {/* Expiring Soon */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Timer className="h-5 w-5" />
-                Expiring Soon
-              </CardTitle>
-              <CardDescription>Items expiring within 30 days</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Timer className="h-5 w-5" />
+                    만료 예정 품목
+                  </CardTitle>
+                  <CardDescription>유효기한이 임박하거나 만료된 품목</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setExpiringItemsModalOpen(true)}>
+                  자세히 보기
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -920,31 +929,111 @@ export function DashboardPage() {
                   <Skeleton className="h-16 w-full" />
                 </div>
               ) : expiringItems.length > 0 ? (
-                <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                  {expiringItems.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex flex-col gap-1 border-b pb-2 last:border-0"
-                    >
-                      <div className="flex items-start justify-between">
-                        <p className="text-sm font-medium truncate">{item.item_code}</p>
-                        <Badge variant={item.days_remaining <= 7 ? "destructive" : "outline"} className="text-xs shrink-0">
-                          {item.days_remaining}d
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {item.location} • Lot: {item.lot_key}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Qty: {item.available_qty ? item.available_qty.toLocaleString() : 'N/A'}
-                        {item.uld_id && ` • ULD: ${item.uld_id}`}
-                      </p>
+                <>
+                  {/* Summary badges */}
+                  <div className="flex gap-2 mb-3 flex-wrap">
+                    {(() => {
+                      const counts = expiringItems.reduce((acc, item) => {
+                        acc[item.urgency] = (acc[item.urgency] || 0) + 1;
+                        return acc;
+                      }, {} as Record<string, number>);
+
+                      return (
+                        <>
+                          {counts['expired'] > 0 && (
+                            <Badge variant="destructive" className="text-xs">
+                              만료: {counts['expired']}
+                            </Badge>
+                          )}
+                          {counts['critical'] > 0 && (
+                            <Badge className="text-xs bg-red-500">
+                              긴급: {counts['critical']}
+                            </Badge>
+                          )}
+                          {counts['high'] > 0 && (
+                            <Badge className="text-xs bg-orange-500">
+                              높음: {counts['high']}
+                            </Badge>
+                          )}
+                          {counts['medium'] > 0 && (
+                            <Badge className="text-xs bg-yellow-500">
+                              보통: {counts['medium']}
+                            </Badge>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                    {expiringItems.slice(0, 5).map((item, idx) => {
+                      const getUrgencyBadge = (urgency: string, daysRemaining: number) => {
+                        const isExpired = daysRemaining < 0;
+                        const displayDays = Math.abs(daysRemaining);
+
+                        switch (urgency) {
+                          case 'expired':
+                            return (
+                              <Badge variant="destructive" className="text-xs shrink-0">
+                                만료 {displayDays}일 경과
+                              </Badge>
+                            );
+                          case 'critical':
+                            return (
+                              <Badge className="text-xs shrink-0 bg-red-500">
+                                {displayDays}일 남음
+                              </Badge>
+                            );
+                          case 'high':
+                            return (
+                              <Badge className="text-xs shrink-0 bg-orange-500">
+                                {displayDays}일 남음
+                              </Badge>
+                            );
+                          case 'medium':
+                            return (
+                              <Badge className="text-xs shrink-0 bg-yellow-500">
+                                {displayDays}일 남음
+                              </Badge>
+                            );
+                          default:
+                            return (
+                              <Badge variant="outline" className="text-xs shrink-0">
+                                {displayDays}일 남음
+                              </Badge>
+                            );
+                        }
+                      };
+
+                      return (
+                        <div
+                          key={idx}
+                          className="flex flex-col gap-1 border-b pb-2 last:border-0"
+                        >
+                          <div className="flex items-start justify-between">
+                            <p className="text-sm font-medium truncate">{item.item_code}</p>
+                            {getUrgencyBadge(item.urgency, item.days_remaining)}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {item.location} • Lot: {item.lot_key}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Qty: {item.available_qty ? item.available_qty.toLocaleString() : 'N/A'}
+                            {item.uld_id && ` • ULD: ${item.uld_id}`}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {expiringItems.length > 5 && (
+                    <div className="text-center text-xs text-muted-foreground mt-2 pt-2 border-t">
+                      외 {expiringItems.length - 5}개 품목 더 보기
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               ) : (
                 <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-                  No expiring items
+                  만료 예정 품목 없음
                 </div>
               )}
             </CardContent>
@@ -1119,6 +1208,14 @@ export function DashboardPage() {
         onOpenChange={setStockDaysModalOpen}
         stockDaysData={stockDaysData}
         productionLines={productionLines}
+      />
+
+      {/* Expiring Items Detail Modal */}
+      <ExpiringItemsDetailModal
+        open={expiringItemsModalOpen}
+        onOpenChange={setExpiringItemsModalOpen}
+        items={expiringItems}
+        loading={loading}
       />
 
       {/* Creation dialog moved to GlobalTopbar */}

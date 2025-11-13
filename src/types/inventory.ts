@@ -27,6 +27,12 @@ export interface RackItem extends PlacedItem {
   // [pillar] - true: pillar exists, false: no pillar (cols+1 pillars, shared across all floors)
   // Pillars are positioned between cells (including both ends)
   pillarAvailability?: boolean[];
+  // Numbering scheme for the rack (col-major or row-major)
+  numbering?: 'col-major' | 'row-major';
+  // Order direction for numbering
+  order?: string;
+  // Per-floor location information
+  perFloorLocations?: any;
 }
 
 export interface FlatItem extends PlacedItem {
@@ -54,15 +60,22 @@ export interface Zone {
   name: string;
   created_by?: string;
   created_at?: string;
+  updated_at?: string;
+  warehouse_id?: string;
+  grid_version?: number;
+  grid?: GridConfig;
+  grid_updated_at?: string;
 }
 
 export interface Layout {
   id: string;
   zone_id: string;
+  zone_name?: string;
   version: number;
   grid: GridConfig;
   created_by?: string;
   updated_at?: string;
+  warehouse_id?: string;
 }
 
 export interface ActivityLog {

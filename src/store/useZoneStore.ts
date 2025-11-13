@@ -516,20 +516,23 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
 
       if (result.success) {
         const now = new Date();
-        set({ 
+        set({
           lastSavedAt: now,
           dataVersion: state.dataVersion + 1  // Increment to trigger data refresh
         });
-        
+
+        // Reload layout from DB to get updated cellCapacity and other computed fields
+        await get().loadLayout();
+
         toast({
           title: 'Layout saved',
           description: `Layout saved for ${state.currentWarehouseId}/${state.currentZone} • ${now.toLocaleTimeString()}`,
         });
-        
-        logActivity('ZONE_SAVE', { 
+
+        logActivity('ZONE_SAVE', {
           warehouse: state.currentWarehouseId,
-          zone: state.currentZone, 
-          itemCount: state.items.length 
+          zone: state.currentZone,
+          itemCount: state.items.length
         });
       } else {
         throw new Error(result.error || 'Failed to save layout');

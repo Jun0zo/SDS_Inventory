@@ -1,15 +1,45 @@
+import { useState } from 'react';
 import { RackItem } from '@/types/inventory';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
+import {
+  mapInventoryToCells,
+  calculateCellOccupancy,
+  getOccupancyColor,
+  getOccupancyBorderColor,
+  formatOccupancy,
+  formatUldCount,
+  getCellTooltip,
+  InventoryItem,
+} from '@/lib/cell-inventory-mapper';
 
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
+interface InventorySummary {
+  total_items?: number;
+  unique_item_codes?: number;
+  items?: InventoryItem[];
+  source?: string;
+}
+
+interface SelectedCell {
+  floor: number;
+  row: number;
+  col: number;
+  items: InventoryItem[];
+  currentCount: number;
+  actualUldCount: number;
+  capacity: number;
+  percentage: number;
+}
+
 interface RackGridEditorProps {
   item: RackItem;
   mode: 'view' | 'edit';
+  inventory?: InventorySummary | null;
   onUpdate: (updates: {
     cellAvailability?: boolean[][][];
     cellCapacity?: number[][][];
@@ -17,7 +47,9 @@ interface RackGridEditorProps {
   }) => void;
 }
 
-export function RackGridEditor({ item, mode, onUpdate }: RackGridEditorProps) {
+export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEditorProps) {
+  // Selected cell state for detail view
+  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   // Initialize cellAvailability if not exists (all cells available by default)
   const getCellAvailability = (): boolean[][][] => {
     if (item.cellAvailability &&
@@ -67,6 +99,11 @@ export function RackGridEditor({ item, mode, onUpdate }: RackGridEditorProps) {
   const cellAvailability = getCellAvailability();
   const cellCapacity = getCellCapacity();
   const pillarAvailability = getPillarAvailability();
+
+  // Map inventory items to cells for visualization
+  const cellInventoryMap = inventory?.items
+    ? mapInventoryToCells(inventory.items, item.location)
+    : new Map();
 
   const toggleCell = (floor: number, row: number, col: number) => {
     const newAvailability = cellAvailability.map((f, fi) =>
@@ -158,7 +195,10 @@ export function RackGridEditor({ item, mode, onUpdate }: RackGridEditorProps) {
           </div>
         </div>
 
-        <div className="space-y-1 max-h-[70vh] overflow-y-auto p-4 bg-muted/20 rounded-lg">
+        {/* Split layout: Grid on left, Detail panel on right */}
+        <div className="flex gap-4">
+          {/* Rack Grid */}
+          <div className={cn("space-y-1 overflow-y-auto p-4 bg-muted/20 rounded-lg", selectedCell ? "flex-1" : "w-full")} style={{ maxHeight: '70vh' }}>
           {/* All floors combined with pillars penetrating through */}
           <div className="relative">
             {/* Pillars - rendered as background, penetrating all floors */}
@@ -220,20 +260,90 @@ export function RackGridEditor({ item, mode, onUpdate }: RackGridEditorProps) {
                               const isAvailable = cellAvailability[floor]?.[rowIndex]?.[colIndex] ?? true;
                               const capacity = cellCapacity[floor]?.[rowIndex]?.[colIndex] ?? 1;
 
+                              // Calculate cell occupancy from inventory data
+                              const occupancy = calculateCellOccupancy(
+                                floor,
+                                rowIndex,
+                                colIndex,
+                                cellInventoryMap,
+                                capacity
+                              );
+
+                              // Get colors based on occupancy
+                              const bgColor = isAvailable
+                                ? getOccupancyColor(occupancy.percentage, false)
+                                : getOccupancyColor(0, true);
+                              const borderColor = isAvailable
+                                ? getOccupancyBorderColor(occupancy.percentage, false)
+                                : getOccupancyBorderColor(0, true);
+
+                              // Generate tooltip
+                              const tooltip = isAvailable
+                                ? getCellTooltip(
+                                    occupancy.items,
+                                    occupancy.currentCount,
+                                    occupancy.actualUldCount,
+                                    occupancy.capacity,
+                                    occupancy.percentage
+                                  )
+                                : `Floor ${floor + 1}, Row ${rowIndex + 1}, Col ${colIndex + 1}: Blocked`;
+
+                              // Check if this cell is selected
+                              const isSelected =
+                                selectedCell?.floor === floor &&
+                                selectedCell?.row === rowIndex &&
+                                selectedCell?.col === colIndex;
+
+                              // Handle cell click
+                              const handleCellClick = () => {
+                                if (isAvailable && occupancy.items.length > 0) {
+                                  setSelectedCell({
+                                    floor,
+                                    row: rowIndex,
+                                    col: colIndex,
+                                    items: occupancy.items,
+                                    currentCount: occupancy.currentCount,
+                                    actualUldCount: occupancy.actualUldCount,
+                                    capacity: occupancy.capacity,
+                                    percentage: occupancy.percentage,
+                                  });
+                                }
+                              };
+
                               return (
                                 <div
                                   key={`${rowIndex}-${colIndex}`}
                                   className={cn(
-                                    'relative rounded border-2',
-                                    isAvailable && capacity > 0
-                                      ? 'bg-green-500/20 border-green-500'
-                                      : 'bg-gray-500/20 border-gray-500'
+                                    'relative rounded border-2 transition-all cursor-pointer hover:shadow-md',
+                                    isSelected && 'ring-2 ring-blue-500 ring-offset-1'
                                   )}
-                                  style={{ width: `${cellWidth}px`, height: '40px' }}
-                                  title={`Floor ${floor + 1}, Row ${rowIndex + 1}, Col ${colIndex + 1}: ${isAvailable ? 'Available' : 'Blocked'} | Capacity: ${capacity}`}
+                                  style={{
+                                    width: `${cellWidth}px`,
+                                    height: '48px',
+                                    backgroundColor: bgColor,
+                                    borderColor: isSelected ? '#3b82f6' : borderColor,
+                                  }}
+                                  title={tooltip}
+                                  onClick={handleCellClick}
                                 >
-                                  <div className="absolute inset-0 flex items-center justify-center text-xs font-medium text-muted-foreground">
-                                    {isAvailable && capacity > 0 ? capacity : '×'}
+                                  <div className="absolute inset-0 flex flex-col items-center justify-center text-xs font-medium px-0.5">
+                                    {isAvailable && capacity > 0 ? (
+                                      <>
+                                        <div className="text-[10px] leading-[1.1] text-gray-700 font-semibold">
+                                          {formatOccupancy(occupancy.currentCount, occupancy.capacity)}
+                                        </div>
+                                        <div className="text-[9px] leading-[1.1] text-gray-600">
+                                          {occupancy.percentage}%
+                                        </div>
+                                        {occupancy.actualUldCount > 0 && (
+                                          <div className="text-[8px] leading-[1.1] text-blue-600 font-medium">
+                                            {formatUldCount(occupancy.actualUldCount)}
+                                          </div>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <div className="text-gray-500">×</div>
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -259,6 +369,89 @@ export function RackGridEditor({ item, mode, onUpdate }: RackGridEditorProps) {
           {/* Ground floor */}
           <div className="h-2 bg-slate-800 rounded-sm mt-2" />
           <div className="text-center text-xs text-muted-foreground">Ground</div>
+          </div>
+
+          {/* Cell Detail Panel */}
+          {selectedCell && (
+            <div className="w-80 bg-background border rounded-lg p-4 space-y-4" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-semibold text-sm">Cell Details</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Floor {selectedCell.floor + 1}, Row {selectedCell.row + 1}, Col {selectedCell.col + 1}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => setSelectedCell(null)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-muted/50 p-2 rounded">
+                  <div className="text-muted-foreground">Current / Max</div>
+                  <div className="font-semibold text-sm">
+                    {selectedCell.currentCount} / {selectedCell.capacity}
+                  </div>
+                </div>
+                <div className="bg-muted/50 p-2 rounded">
+                  <div className="text-muted-foreground">Occupancy</div>
+                  <div className="font-semibold text-sm">{selectedCell.percentage}%</div>
+                </div>
+                <div className="bg-blue-50 p-2 rounded col-span-2">
+                  <div className="text-blue-700 text-xs">Actual ULDs in Cell</div>
+                  <div className="font-semibold text-blue-900">{selectedCell.actualUldCount}</div>
+                </div>
+              </div>
+
+              {/* Items List */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-xs">Items in Cell</h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {selectedCell.items.map((item, idx) => (
+                    <div key={idx} className="border rounded p-2 space-y-1 text-xs bg-card">
+                      <div className="flex justify-between items-start">
+                        <div className="font-medium text-sm">{item.item_code}</div>
+                        <div className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                          Qty: {item.available_qty}
+                        </div>
+                      </div>
+                      {item.uld && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">ULD:</span>
+                          <span className="font-mono text-xs">{item.uld}</span>
+                        </div>
+                      )}
+                      {item.lot_key && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">Lot:</span>
+                          <span className="font-mono text-xs">{item.lot_key}</span>
+                        </div>
+                      )}
+                      {item.cell_no && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">Cell:</span>
+                          <span className="font-mono text-xs">{item.cell_no}</span>
+                        </div>
+                      )}
+                      {item.inb_date && (
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <span>In:</span>
+                          <span>{new Date(item.inb_date).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

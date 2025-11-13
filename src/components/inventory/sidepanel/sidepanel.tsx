@@ -16,7 +16,6 @@ import { calculateCapacity, calculateUtilization, getUtilizationColor, getUtiliz
 import { Package2, Package, Box, Eye } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { LocationInventoryItem } from '@/lib/etl-location';
-import { supabase } from '@/lib/supabase/client';
 import { fetchLocationInventoryDirect } from '@/store/useLocationInventoryStore';
 
 export function SidePanel() {
@@ -150,8 +149,8 @@ export function SidePanel() {
       const lotEntries = Object.entries(directMvData.lot_distribution);
       if (lotEntries.length > 0) {
         return lotEntries
-          .filter(([key, value]) => (value as number) > 0)
-          .map(([key, value], index: number) => ({
+          .filter(([, value]) => (value as number) > 0)
+          .map(([key, value]) => ({
             name: key === 'No Lot' ? 'No Lot' : key,
             value: value as number,
             payload: {
@@ -166,7 +165,7 @@ export function SidePanel() {
     if (selectedZoneData?.cachedDisplayData?.lot_distribution) {
       return selectedZoneData.cachedDisplayData.lot_distribution
         .filter((lot: any) => lot.quantity > 0)
-        .map((lot: any, index: number) => ({
+        .map((lot: any) => ({
           name: lot.lot_key || 'No Lot',
           value: lot.quantity,
           payload: {
@@ -197,6 +196,9 @@ export function SidePanel() {
       return {
         total_items: directMvData.total_items || 0,
         unique_item_codes: directMvData.unique_item_codes || 0,
+        max_capacity: directMvData.max_capacity,
+        utilization_percentage: directMvData.utilization_percentage,
+        current_stock_count: directMvData.current_stock_count,
         items: directMvData.items ? directMvData.items.map((item: any) => ({
           id: item.id,
           item_code: item.item_code,
@@ -470,7 +472,7 @@ export function SidePanel() {
                         paddingAngle={2}
                         dataKey="value"
                       >
-                        {finalLotData.map((_entry, index) => (
+                        {finalLotData.map((_entry: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -489,7 +491,7 @@ export function SidePanel() {
                 </div>
                 {/* Lot breakdown list */}
                 <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {finalLotData.map((lot, index) => (
+                  {finalLotData.map((lot: any, index: number) => (
                     <div key={lot.name} className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
                         <div
@@ -565,7 +567,7 @@ export function SidePanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inventory?.items?.map((item) => (
+                  {inventory?.items?.map((item: any) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium whitespace-nowrap">
                         {item.item_code || '-'}
@@ -606,6 +608,7 @@ export function SidePanel() {
               <RackGridEditor
                 item={selectedItem}
                 mode="view"
+                inventory={inventory}
                 onUpdate={(updates) => {
                   updateItem(selectedItem.id, updates);
                 }}
@@ -665,7 +668,7 @@ export function SidePanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inventory?.items?.map((item) => (
+                  {inventory?.items?.map((item: any) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium whitespace-nowrap">
                         {item.item_code || '-'}
@@ -786,7 +789,7 @@ export function SidePanel() {
 
           <ScrollArea className="max-h-[60vh]">
             <div className="grid gap-3 p-1">
-              {inventory?.items?.map((item) => (
+              {inventory?.items?.map((item: any) => (
                 <div
                   key={item.id}
                   className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"

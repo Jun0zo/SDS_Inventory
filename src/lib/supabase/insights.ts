@@ -37,6 +37,7 @@ export interface ExpiringItem {
   available_qty: number;
   valid_date: string;
   days_remaining: number;
+  urgency: 'expired' | 'critical' | 'high' | 'medium' | 'low';
   uld_id?: string;
 }
 
@@ -502,6 +503,7 @@ export async function getExpiringItems(warehouseIds: string[], daysAhead = 30): 
       available_qty: Number(row.available_qty) || 0,
       valid_date: row.valid_date,
       days_remaining: row.days_remaining,  // Already calculated in MV
+      urgency: (row.urgency as 'expired' | 'critical' | 'high' | 'medium' | 'low') || 'low',
       uld_id: row.uld_id || undefined,
     })) || [];
 

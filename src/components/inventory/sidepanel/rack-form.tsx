@@ -14,7 +14,7 @@ interface RackFormProps {
 }
 
 export function RackForm({ item }: RackFormProps) {
-  const { updateItem, removeItem, rotateSelected, isEditMode } = useZoneStore();
+  const { updateItem, removeItem, isEditMode } = useZoneStore();
   const [localLocation, setLocalLocation] = useState(item.location);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
@@ -52,14 +52,14 @@ export function RackForm({ item }: RackFormProps) {
             handleLocationBlur();
           }}
           onKeyDown={(e) => {
-            console.log('Key pressed:', e.key, 'keyCode:', e.keyCode, 'target value:', e.target.value);
+            console.log('Key pressed:', e.key, 'keyCode:', e.keyCode, 'target value:', (e.target as HTMLInputElement).value);
             if (e.key === 'Backspace' || e.key === 'Delete') {
               console.log('Delete key pressed');
             }
           }}
           onKeyUp={(e) => {
             if (e.key === 'Backspace' || e.key === 'Delete') {
-              console.log('Delete key released, current value:', e.target.value);
+              console.log('Delete key released, current value:', (e.target as HTMLInputElement).value);
             }
           }}
         />

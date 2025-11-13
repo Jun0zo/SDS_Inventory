@@ -656,7 +656,7 @@ item_lot_distribution AS (
     SELECT
       wh2.code AS warehouse_code,
       i2.id AS item_id,
-      w.lot_no AS lot_key,
+      COALESCE(w.production_lot_no, w.lot_no) AS lot_key,
       COUNT(*) AS lot_count,
       SUM(w.available_qty)::NUMERIC AS lot_qty
     FROM public.items i2
@@ -670,7 +670,7 @@ item_lot_distribution AS (
         -- Rack items: pattern match (A35 matches A35-01-01)
         (i2.type = 'rack' AND UPPER(TRIM(w.cell_no)) ~ ('^' || UPPER(TRIM(i2.location)) || '-[0-9]+-[0-9]+$'))
       )
-    GROUP BY wh2.code, i2.id, w.lot_no
+    GROUP BY wh2.code, i2.id, COALESCE(w.production_lot_no, w.lot_no)
   ) lot_agg ON
     lot_agg.warehouse_code = wh.code
     AND lot_agg.item_id = i.id
@@ -741,13 +741,14 @@ SELECT
   SUM(COALESCE(w.available_qty, 0))::NUMERIC AS total_available_qty,
   SUM(COALESCE(w.tot_qty, 0))::NUMERIC AS total_qty,
   COUNT(DISTINCT w.item_code) FILTER (WHERE w.item_code IS NOT NULL) AS unique_item_codes,
-  COUNT(DISTINCT w.lot_no) FILTER (WHERE w.lot_no IS NOT NULL) AS unique_lots,
+  COUNT(DISTINCT COALESCE(w.production_lot_no, w.lot_no)) FILTER (WHERE COALESCE(w.production_lot_no, w.lot_no) IS NOT NULL) AS unique_lots,
   -- Items as JSON array (ALL items for SidePanel)
   jsonb_agg(
     jsonb_build_object(
       'id', w.id,
       'item_code', w.item_code,
-      'lot_key', w.lot_no,
+      'lot_key', COALESCE(w.production_lot_no, w.lot_no),
+      'production_lot_no', w.production_lot_no,
       'available_qty', w.available_qty,
       'total_qty', w.tot_qty,
       'inb_date', w.inb_date,
@@ -756,7 +757,7 @@ SELECT
       'item_name', w.item_nm,
       'cell_no', w.cell_no  -- WMS cell_no for reference
     )
-    ORDER BY w.available_qty DESC NULLS LAST, w.cell_no, w.item_code, w.lot_no
+    ORDER BY w.available_qty DESC NULLS LAST, w.cell_no, w.item_code, COALESCE(w.production_lot_no, w.lot_no)
   ) FILTER (WHERE w.id IS NOT NULL) AS items_json,
   -- Lot distribution (from pre-aggregated CTE)
   ld.lot_dist_json AS lot_distribution,
@@ -1103,10 +1104,11 @@ SELECT
   inb_date,
   item_nm,
   uld_id,
-  -- Pre-calculate days remaining
+  -- Pre-calculate days remaining (can be negative for expired items)
   EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP))::INTEGER AS days_remaining,
-  -- Categorize urgency
+  -- Categorize urgency (including expired items)
   CASE
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) < 0 THEN 'expired'
     WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 7 THEN 'critical'
     WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 14 THEN 'high'
     WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 30 THEN 'medium'
@@ -1116,10 +1118,16 @@ SELECT
 FROM public.wms_raw_rows
 WHERE split_key IS NOT NULL
   AND valid_date IS NOT NULL
-  AND valid_date >= CURRENT_DATE
+  AND valid_date >= CURRENT_DATE - INTERVAL '30 days'  -- Include items expired up to 30 days ago
   AND valid_date <= CURRENT_DATE + INTERVAL '90 days'  -- Look ahead 90 days
-ORDER BY valid_date ASC, available_qty DESC
-LIMIT 200;  -- Store top 200 expiring items
+ORDER BY
+  CASE
+    WHEN valid_date < CURRENT_DATE THEN 0  -- Expired items first
+    ELSE 1
+  END,
+  valid_date ASC,
+  available_qty DESC
+LIMIT 500;  -- Increased limit to include expired items
 
 -- Create indexes on materialized view
 CREATE INDEX idx_expiring_items_mv_factory_location

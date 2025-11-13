@@ -974,7 +974,7 @@ async def debug_wms_zones(limit: int = Query(50, description="Number of rows to 
 # Materials Catalog Endpoints
 class UpdateMaterialRequest(BaseModel):
     major_category: Optional[str] = None
-    minor_category: Optional[str] = None
+    minor_category_id: Optional[str] = None  # UUID reference to minor_categories table
 
 
 @app_ext.get("/materials")
@@ -1069,34 +1069,39 @@ async def update_material(
 ):
     """
     Update material classification.
-    Only major_category and minor_category can be updated by users.
+    Only major_category and minor_category_id can be updated by users.
     """
     try:
         from supabase_client import supabase
-        
+
         # Check if material exists
         existing = supabase.table('materials').select('*').eq('item_code', item_code).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail=f"Material {item_code} not found")
-        
+
         # Prepare update data
         update_data = {}
         if update.major_category is not None:
             update_data['major_category'] = update.major_category
-        if update.minor_category is not None:
-            update_data['minor_category'] = update.minor_category
-        
+        if update.minor_category_id is not None:
+            # Verify minor category exists if provided
+            if update.minor_category_id:  # Allow empty string to clear
+                minor = supabase.table('minor_categories').select('*').eq('id', update.minor_category_id).execute()
+                if not minor.data:
+                    raise HTTPException(status_code=404, detail="Minor category not found")
+            update_data['minor_category_id'] = update.minor_category_id if update.minor_category_id else None
+
         if not update_data:
             raise HTTPException(status_code=400, detail="No fields to update")
-        
+
         update_data['updated_at'] = datetime.datetime.utcnow().isoformat()
-        
+
         # Update material
         result = supabase.table('materials').update(update_data).eq('item_code', item_code).execute()
-        
+
         if not result.data:
             raise HTTPException(status_code=500, detail="Failed to update material")
-        
+
         return result.data[0]
     except HTTPException:
         raise
@@ -1257,6 +1262,230 @@ async def delete_major_category(
         raise
     except Exception as e:
         logger.error(f"Error deleting major category: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# MINOR CATEGORIES API
+# ============================================
+
+@app_ext.get("/materials/categories/minor")
+async def get_minor_categories(_: bool = Depends(require_supabase)):
+    """
+    Get list of all minor categories with their major category information.
+    Returns categories ordered by major category and display_order.
+    """
+    try:
+        from supabase_client import supabase
+
+        # Get all minor categories with major category info
+        result = supabase.table('minor_categories')\
+            .select('*, major_category:major_categories(id, name, color)')\
+            .order('display_order')\
+            .execute()
+
+        return {
+            "categories": result.data
+        }
+    except Exception as e:
+        logger.error(f"Error getting minor categories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app_ext.get("/materials/categories/major/{major_id}/minors")
+async def get_minor_categories_by_major(
+    major_id: str,
+    _: bool = Depends(require_supabase)
+):
+    """
+    Get all minor categories for a specific major category.
+    Returns categories ordered by display_order.
+    """
+    try:
+        from supabase_client import supabase
+
+        # Check if major category exists
+        major = supabase.table('major_categories').select('*').eq('id', major_id).execute()
+        if not major.data:
+            raise HTTPException(status_code=404, detail="Major category not found")
+
+        # Get minor categories for this major category
+        result = supabase.table('minor_categories')\
+            .select('*')\
+            .eq('major_category_id', major_id)\
+            .order('display_order')\
+            .execute()
+
+        return {
+            "major_category": major.data[0],
+            "minor_categories": result.data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting minor categories for major {major_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class CreateMinorCategoryRequest(BaseModel):
+    name: str
+    major_category_id: str
+    description: Optional[str] = None
+    display_order: Optional[int] = None
+
+
+class UpdateMinorCategoryRequest(BaseModel):
+    name: Optional[str] = None
+    major_category_id: Optional[str] = None
+    description: Optional[str] = None
+    display_order: Optional[int] = None
+
+
+@app_ext.post("/materials/categories/minor")
+async def create_minor_category(
+    category: CreateMinorCategoryRequest,
+    _: bool = Depends(require_supabase)
+):
+    """Create a new minor category under a major category."""
+    try:
+        from supabase_client import supabase
+
+        # Check if major category exists
+        major = supabase.table('major_categories').select('*').eq('id', category.major_category_id).execute()
+        if not major.data:
+            raise HTTPException(status_code=404, detail="Major category not found")
+
+        # Check if minor category already exists for this major category
+        existing = supabase.table('minor_categories')\
+            .select('*')\
+            .eq('name', category.name)\
+            .eq('major_category_id', category.major_category_id)\
+            .execute()
+        if existing.data:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Minor category '{category.name}' already exists for this major category"
+            )
+
+        # Create minor category
+        data = {
+            'name': category.name,
+            'major_category_id': category.major_category_id,
+            'description': category.description,
+            'display_order': category.display_order or 0
+        }
+
+        result = supabase.table('minor_categories').insert(data).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create minor category")
+
+        return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating minor category: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app_ext.patch("/materials/categories/minor/{category_id}")
+async def update_minor_category(
+    category_id: str,
+    update: UpdateMinorCategoryRequest,
+    _: bool = Depends(require_supabase)
+):
+    """Update a minor category."""
+    try:
+        from supabase_client import supabase
+
+        # Check if category exists
+        existing = supabase.table('minor_categories').select('*').eq('id', category_id).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Minor category not found")
+
+        # Prepare update data
+        update_data = {}
+
+        if update.name is not None:
+            # Check if new name conflicts with existing category in same major category
+            major_id = update.major_category_id if update.major_category_id else existing.data[0]['major_category_id']
+            name_check = supabase.table('minor_categories')\
+                .select('*')\
+                .eq('name', update.name)\
+                .eq('major_category_id', major_id)\
+                .neq('id', category_id)\
+                .execute()
+            if name_check.data:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Minor category '{update.name}' already exists for this major category"
+                )
+            update_data['name'] = update.name
+
+        if update.major_category_id is not None:
+            # Verify new major category exists
+            major = supabase.table('major_categories').select('*').eq('id', update.major_category_id).execute()
+            if not major.data:
+                raise HTTPException(status_code=404, detail="Major category not found")
+            update_data['major_category_id'] = update.major_category_id
+
+        if update.description is not None:
+            update_data['description'] = update.description
+        if update.display_order is not None:
+            update_data['display_order'] = update.display_order
+
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        update_data['updated_at'] = datetime.datetime.utcnow().isoformat()
+
+        # Update category
+        result = supabase.table('minor_categories').update(update_data).eq('id', category_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update minor category")
+
+        return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating minor category: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app_ext.delete("/materials/categories/minor/{category_id}")
+async def delete_minor_category(
+    category_id: str,
+    _: bool = Depends(require_supabase)
+):
+    """
+    Delete a minor category.
+    Note: This will set materials using this category to NULL.
+    """
+    try:
+        from supabase_client import supabase
+
+        # Check if category exists
+        existing = supabase.table('minor_categories').select('*').eq('id', category_id).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Minor category not found")
+
+        category_name = existing.data[0]['name']
+
+        # Update materials using this category to NULL
+        supabase.table('materials').update({'minor_category_id': None}).eq('minor_category_id', category_id).execute()
+
+        # Delete category (CASCADE will handle this, but explicit is better)
+        result = supabase.table('minor_categories').delete().eq('id', category_id).execute()
+
+        return {
+            "ok": True,
+            "message": f"Minor category '{category_name}' deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting minor category: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================

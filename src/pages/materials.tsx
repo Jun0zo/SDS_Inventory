@@ -38,7 +38,8 @@ interface Material {
   description: string | null;
   unit: string | null;
   major_category: string | null;
-  minor_category: string | null;
+  minor_category_id: string | null;  // UUID reference
+  minor_category?: MinorCategory;    // Joined data from API
   source_system: string | null;
   first_seen_at: string;
   last_seen_at: string;
@@ -62,6 +63,16 @@ interface MajorCategory {
   updated_at: string;
 }
 
+interface MinorCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  major_category_id: string;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function MaterialsPage() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,9 +88,12 @@ export default function MaterialsPage() {
   const [majorCategories, setMajorCategories] = useState<MajorCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
 
+  // Minor categories state
+  const [minorCategories, setMinorCategories] = useState<MinorCategory[]>([]);
+  const [loadingMinorCategories, setLoadingMinorCategories] = useState(false);
+
   // Inline editing state
   const [savingItemCode, setSavingItemCode] = useState<string | null>(null);
-  const [tempMinorCategories, setTempMinorCategories] = useState<Record<string, string>>({});
 
   // Manage categories dialog state
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
@@ -88,6 +102,14 @@ export default function MaterialsPage() {
   const [editingCategory, setEditingCategory] = useState<MajorCategory | null>(null);
   const [editCategoryName, setEditCategoryName] = useState('');
   const [editCategoryDescription, setEditCategoryDescription] = useState('');
+
+  // Minor category management state
+  const [expandedMajorCategories, setExpandedMajorCategories] = useState<Set<string>>(new Set());
+  const [newMinorCategoryName, setNewMinorCategoryName] = useState<Record<string, string>>({});
+  const [newMinorCategoryDescription, setNewMinorCategoryDescription] = useState<Record<string, string>>({});
+  const [editingMinorCategory, setEditingMinorCategory] = useState<MinorCategory | null>(null);
+  const [editMinorCategoryName, setEditMinorCategoryName] = useState('');
+  const [editMinorCategoryDescription, setEditMinorCategoryDescription] = useState('');
 
   const { toast } = useToast();
 
@@ -101,7 +123,7 @@ export default function MaterialsPage() {
         console.error('Failed to fetch categories:', response.status, errorText);
         throw new Error(`Failed to fetch categories: ${response.status}`);
       }
-      
+
       const data = await response.json();
       setMajorCategories(data.categories || []);
     } catch (error) {
@@ -115,6 +137,30 @@ export default function MaterialsPage() {
       });
     } finally {
       setLoadingCategories(false);
+    }
+  };
+
+  // Fetch all minor categories
+  const fetchMinorCategories = async () => {
+    setLoadingMinorCategories(true);
+    try {
+      const response = await fetch('/api/materials/categories/minor');
+      if (!response.ok) {
+        throw new Error('Failed to fetch minor categories');
+      }
+
+      const data = await response.json();
+      setMinorCategories(data.categories || []);
+    } catch (error) {
+      console.error('Error fetching minor categories:', error);
+      setMinorCategories([]);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch minor categories',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingMinorCategories(false);
     }
   };
 
@@ -151,6 +197,7 @@ export default function MaterialsPage() {
 
   useEffect(() => {
     fetchMajorCategories();
+    fetchMinorCategories();
   }, []);
 
   useEffect(() => {
@@ -173,7 +220,7 @@ export default function MaterialsPage() {
   // Update material category
   const updateMaterialCategory = async (
     itemCode: string,
-    field: 'major_category' | 'minor_category',
+    field: 'major_category' | 'minor_category_id',
     value: string | null
   ) => {
     setSavingItemCode(itemCode);
@@ -340,6 +387,157 @@ export default function MaterialsPage() {
     setEditingCategory(null);
     setEditCategoryName('');
     setEditCategoryDescription('');
+  };
+
+  // Minor category management functions
+  const handleCreateMinorCategory = async (majorCategoryId: string) => {
+    const name = newMinorCategoryName[majorCategoryId]?.trim();
+    if (!name) {
+      toast({
+        title: 'Error',
+        description: 'Minor category name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/materials/categories/minor', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          major_category_id: majorCategoryId,
+          description: newMinorCategoryDescription[majorCategoryId]?.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create minor category');
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Minor category created successfully',
+      });
+
+      // Clear inputs for this major category
+      setNewMinorCategoryName((prev) => {
+        const next = { ...prev };
+        delete next[majorCategoryId];
+        return next;
+      });
+      setNewMinorCategoryDescription((prev) => {
+        const next = { ...prev };
+        delete next[majorCategoryId];
+        return next;
+      });
+
+      fetchMinorCategories();
+    } catch (error: any) {
+      console.error('Error creating minor category:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create minor category',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleUpdateMinorCategory = async () => {
+    if (!editingMinorCategory) return;
+
+    try {
+      const response = await fetch(`/api/materials/categories/minor/${editingMinorCategory.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: editMinorCategoryName.trim(),
+          description: editMinorCategoryDescription.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to update minor category');
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Minor category updated successfully',
+      });
+
+      setEditingMinorCategory(null);
+      setEditMinorCategoryName('');
+      setEditMinorCategoryDescription('');
+      fetchMinorCategories();
+      fetchMaterials();
+    } catch (error: any) {
+      console.error('Error updating minor category:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update minor category',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteMinorCategory = async (minorCategory: MinorCategory) => {
+    if (!confirm(`Are you sure you want to delete "${minorCategory.name}"? Materials using this category will be unset.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/materials/categories/minor/${minorCategory.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Failed to delete minor category');
+
+      toast({
+        title: 'Success',
+        description: 'Minor category deleted successfully',
+      });
+
+      fetchMinorCategories();
+      fetchMaterials();
+    } catch (error) {
+      console.error('Error deleting minor category:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete minor category',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const startEditMinorCategory = (minorCategory: MinorCategory) => {
+    setEditingMinorCategory(minorCategory);
+    setEditMinorCategoryName(minorCategory.name);
+    setEditMinorCategoryDescription(minorCategory.description || '');
+  };
+
+  const cancelEditMinorCategory = () => {
+    setEditingMinorCategory(null);
+    setEditMinorCategoryName('');
+    setEditMinorCategoryDescription('');
+  };
+
+  const toggleMajorCategoryExpansion = (categoryId: string) => {
+    setExpandedMajorCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
   };
 
   const totalPages = Math.ceil(total / limit);
@@ -515,45 +713,58 @@ export default function MaterialsPage() {
                             <TableCell>
                               {savingItemCode === material.item_code ? (
                                 <span className="text-sm text-muted-foreground">Saving...</span>
-                              ) : (
-                                <Input
-                                  value={
-                                    tempMinorCategories[material.item_code] !== undefined
-                                      ? tempMinorCategories[material.item_code]
-                                      : material.minor_category || ''
-                                  }
-                                  onChange={(e) => {
-                                    setTempMinorCategories((prev) => ({
-                                      ...prev,
-                                      [material.item_code]: e.target.value,
-                                    }));
-                                  }}
-                                  onBlur={() => {
-                                    const newValue = tempMinorCategories[material.item_code];
-                                    if (newValue !== undefined && newValue !== material.minor_category) {
+                              ) : (() => {
+                                // Get major category ID for this material
+                                const majorCat = majorCategories.find(
+                                  (cat) => cat.name === material.major_category
+                                );
+
+                                // Filter minor categories for this major category
+                                const availableMinorCategories = majorCat
+                                  ? minorCategories.filter(
+                                      (minor) => minor.major_category_id === majorCat.id
+                                    )
+                                  : [];
+
+                                const hasMinorCategories = availableMinorCategories.length > 0;
+                                const isDisabled = !material.major_category || !hasMinorCategories;
+
+                                return (
+                                  <Select
+                                    value={material.minor_category_id || '__none__'}
+                                    onValueChange={(value) =>
                                       updateMaterialCategory(
                                         material.item_code,
-                                        'minor_category',
-                                        newValue || null
-                                      );
+                                        'minor_category_id',
+                                        value === '__none__' ? null : value
+                                      )
                                     }
-                                    // Clear temp value
-                                    setTempMinorCategories((prev) => {
-                                      const newTemp = { ...prev };
-                                      delete newTemp[material.item_code];
-                                      return newTemp;
-                                    });
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.currentTarget.blur();
-                                    }
-                                  }}
-                                  placeholder="Enter minor category..."
-                                  className="h-8"
-                                  disabled={savingItemCode === material.item_code}
-                                />
-                              )}
+                                    disabled={savingItemCode === material.item_code || isDisabled}
+                                  >
+                                    <SelectTrigger className="h-8">
+                                      <SelectValue
+                                        placeholder={
+                                          !material.major_category
+                                            ? "Select major first"
+                                            : !hasMinorCategories
+                                            ? "No minor categories"
+                                            : "Select minor category"
+                                        }
+                                      />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none__">
+                                        <span className="text-muted-foreground">Not set</span>
+                                      </SelectItem>
+                                      {availableMinorCategories.map((minor) => (
+                                        <SelectItem key={minor.id} value={minor.id}>
+                                          {minor.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs">
@@ -685,31 +896,170 @@ export default function MaterialsPage() {
                         </div>
                       ) : (
                         // View mode
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="font-semibold">{category.name}</div>
-                            {category.description && (
-                              <div className="text-sm text-muted-foreground mt-1">
-                                {category.description}
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="font-semibold">{category.name}</div>
+                              {category.description && (
+                                <div className="text-sm text-muted-foreground mt-1">
+                                  {category.description}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => toggleMajorCategoryExpansion(category.id)}
+                              >
+                                {expandedMajorCategories.has(category.id) ? 'Hide' : 'Show'} Minor Categories
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => startEditCategory(category)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteCategory(category)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Minor categories section */}
+                          {expandedMajorCategories.has(category.id) && (
+                            <div className="ml-4 pl-4 border-l-2 space-y-3">
+                              {/* Add new minor category */}
+                              <div className="space-y-2 p-3 bg-muted/30 rounded-lg">
+                                <div className="text-xs font-semibold text-muted-foreground">
+                                  Add Minor Category
+                                </div>
+                                <div className="space-y-2">
+                                  <Input
+                                    placeholder="Minor category name..."
+                                    value={newMinorCategoryName[category.id] || ''}
+                                    onChange={(e) =>
+                                      setNewMinorCategoryName((prev) => ({
+                                        ...prev,
+                                        [category.id]: e.target.value,
+                                      }))
+                                    }
+                                    className="h-8"
+                                  />
+                                  <Input
+                                    placeholder="Description (optional)..."
+                                    value={newMinorCategoryDescription[category.id] || ''}
+                                    onChange={(e) =>
+                                      setNewMinorCategoryDescription((prev) => ({
+                                        ...prev,
+                                        [category.id]: e.target.value,
+                                      }))
+                                    }
+                                    className="h-8"
+                                  />
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleCreateMinorCategory(category.id)}
+                                    className="w-full"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add Minor Category
+                                  </Button>
+                                </div>
                               </div>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => startEditCategory(category)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteCategory(category)}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
+
+                              {/* Existing minor categories */}
+                              {(() => {
+                                const categoryMinors = minorCategories.filter(
+                                  (minor) => minor.major_category_id === category.id
+                                );
+                                return categoryMinors.length === 0 ? (
+                                  <div className="text-xs text-muted-foreground text-center py-2">
+                                    No minor categories yet
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {categoryMinors.map((minor) => (
+                                      <div key={minor.id} className="p-2 bg-muted/20 rounded border">
+                                        {editingMinorCategory?.id === minor.id ? (
+                                          // Edit mode for minor category
+                                          <div className="space-y-2">
+                                            <Input
+                                              value={editMinorCategoryName}
+                                              onChange={(e) =>
+                                                setEditMinorCategoryName(e.target.value)
+                                              }
+                                              className="h-8"
+                                            />
+                                            <Input
+                                              value={editMinorCategoryDescription}
+                                              onChange={(e) =>
+                                                setEditMinorCategoryDescription(e.target.value)
+                                              }
+                                              placeholder="Description (optional)..."
+                                              className="h-8"
+                                            />
+                                            <div className="flex gap-2">
+                                              <Button
+                                                size="sm"
+                                                onClick={handleUpdateMinorCategory}
+                                              >
+                                                Save
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={cancelEditMinorCategory}
+                                              >
+                                                Cancel
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          // View mode for minor category
+                                          <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                              <div className="text-sm font-medium">
+                                                {minor.name}
+                                              </div>
+                                              {minor.description && (
+                                                <div className="text-xs text-muted-foreground mt-0.5">
+                                                  {minor.description}
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="flex gap-1">
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => startEditMinorCategory(minor)}
+                                                className="h-7 w-7 p-0"
+                                              >
+                                                <Edit className="h-3 w-3" />
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleDeleteMinorCategory(minor)}
+                                                className="h-7 w-7 p-0"
+                                              >
+                                                <Trash2 className="h-3 w-3 text-destructive" />
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
