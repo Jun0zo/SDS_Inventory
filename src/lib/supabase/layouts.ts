@@ -287,12 +287,23 @@ export async function createOrUpdateLayout(params: {
       };
 
       if (item.type === 'rack') {
-        // Initialize cellCapacity if not exists (all cells capacity = 1 by default)
-        const cellCapacity = item.cellCapacity || Array.from({ length: item.floors }, () =>
-          Array.from({ length: item.rows }, () =>
-            Array.from({ length: item.cols }, () => 1)
-          )
-        );
+        // Validate and resize cellCapacity if dimensions changed
+        let cellCapacity = item.cellCapacity;
+        
+        if (!cellCapacity || 
+            cellCapacity.length !== item.floors ||
+            cellCapacity[0]?.length !== item.rows ||
+            cellCapacity[0]?.[0]?.length !== item.cols) {
+          // Resize or initialize cellCapacity to match current dimensions
+          cellCapacity = Array.from({ length: item.floors }, (_, f) =>
+            Array.from({ length: item.rows }, (_, r) =>
+              Array.from({ length: item.cols }, (_, c) => {
+                // Preserve existing capacity if available, otherwise default to 1
+                return item.cellCapacity?.[f]?.[r]?.[c] ?? 1;
+              })
+            )
+          );
+        }
 
         // Calculate floor_capacities from cellCapacity to ensure sync
         const floorCapacities = cellCapacity.map((floor) =>
