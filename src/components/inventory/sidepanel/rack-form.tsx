@@ -37,31 +37,12 @@ export function RackForm({ item }: RackFormProps) {
     <div className="space-y-4">
       <div>
         <Label htmlFor="location">Location Code</Label>
-        <input
-          key={item.id} // Force re-render when item changes
+        <Input
           id="location"
           type="text"
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          defaultValue={localLocation}
-          onChange={(e) => {
-            console.log('Input onChange fired:', e.target.value, 'prev:', localLocation);
-            setLocalLocation(e.target.value);
-          }}
-          onBlur={() => {
-            console.log('Input onBlur fired');
-            handleLocationBlur();
-          }}
-          onKeyDown={(e) => {
-            console.log('Key pressed:', e.key, 'keyCode:', e.keyCode, 'target value:', (e.target as HTMLInputElement).value);
-            if (e.key === 'Backspace' || e.key === 'Delete') {
-              console.log('Delete key pressed');
-            }
-          }}
-          onKeyUp={(e) => {
-            if (e.key === 'Backspace' || e.key === 'Delete') {
-              console.log('Delete key released, current value:', (e.target as HTMLInputElement).value);
-            }
-          }}
+          value={localLocation}
+          onChange={(e) => setLocalLocation(e.target.value)}
+          onBlur={handleLocationBlur}
         />
       </div>
 
