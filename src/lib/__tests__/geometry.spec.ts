@@ -27,7 +27,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       const aabb = getAABB(item);
@@ -50,7 +50,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       const aabb = getAABB(item);
@@ -75,7 +75,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(applyRotationWH(item)).toEqual({ w: 6, h: 4 });
@@ -97,7 +97,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(applyRotationWH(item)).toEqual({ w: 4, h: 6 });
@@ -119,7 +119,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(applyRotationWH(item)).toEqual({ w: 4, h: 6 });
@@ -176,7 +176,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       const rotated = rotateItem(item);
@@ -199,7 +199,7 @@ describe('geometry', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       const rotated = rotateItem(item);

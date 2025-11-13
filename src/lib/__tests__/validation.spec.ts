@@ -34,7 +34,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(validateBounds(item, defaultGrid)).toBeNull();
@@ -56,7 +56,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(validateBounds(item, defaultGrid)).not.toBeNull();
@@ -78,7 +78,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(validateBounds(item, defaultGrid)).not.toBeNull();
@@ -101,7 +101,7 @@ describe('validation', () => {
       cols: 3,
       numbering: 'col-major',
       order: 'asc',
-      perFloorLocations: [3, 3, 3],
+      perFloorLocations: false,
     };
 
     const item2: RackItem = {
@@ -119,7 +119,7 @@ describe('validation', () => {
       cols: 3,
       numbering: 'col-major',
       order: 'asc',
-      perFloorLocations: [3, 3, 3],
+      perFloorLocations: false,
     };
 
     it('should accept non-overlapping items', () => {
@@ -157,7 +157,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(validateGridSnap(item, defaultGrid)).toBeNull();
@@ -179,7 +179,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(validateGridSnap(item, defaultGrid)).not.toBeNull();
@@ -201,7 +201,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       const grid = { ...defaultGrid, snap: false };
@@ -226,7 +226,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(validateRotation(item)).toBeNull();
@@ -248,7 +248,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(validateRotation(item)).not.toBeNull();
@@ -272,7 +272,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(isItemValid(item, defaultGrid, [])).toBe(true);
@@ -294,7 +294,7 @@ describe('validation', () => {
         cols: 3,
         numbering: 'col-major',
         order: 'asc',
-        perFloorLocations: [3, 3, 3],
+        perFloorLocations: false,
       };
 
       expect(isItemValid(item, defaultGrid, [])).toBe(false);
