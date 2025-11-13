@@ -90,7 +90,6 @@ export default function MaterialsPage() {
 
   // Minor categories state
   const [minorCategories, setMinorCategories] = useState<MinorCategory[]>([]);
-  const [loadingMinorCategories, setLoadingMinorCategories] = useState(false);
 
   // Inline editing state
   const [savingItemCode, setSavingItemCode] = useState<string | null>(null);
@@ -142,7 +141,6 @@ export default function MaterialsPage() {
 
   // Fetch all minor categories
   const fetchMinorCategories = async () => {
-    setLoadingMinorCategories(true);
     try {
       const response = await fetch('/api/materials/categories/minor');
       if (!response.ok) {
@@ -159,8 +157,6 @@ export default function MaterialsPage() {
         description: 'Failed to fetch minor categories',
         variant: 'destructive',
       });
-    } finally {
-      setLoadingMinorCategories(false);
     }
   };
 

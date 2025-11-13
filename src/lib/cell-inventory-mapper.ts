@@ -74,8 +74,7 @@ export function parseCellLocation(cellNo: string): CellLocation | null {
  * Returns a map of "floor-row-col" -> items array
  */
 export function mapInventoryToCells(
-  items: InventoryItem[],
-  rackLocation?: string
+  items: InventoryItem[]
 ): Map<string, InventoryItem[]> {
   const cellMap = new Map<string, InventoryItem[]>();
 

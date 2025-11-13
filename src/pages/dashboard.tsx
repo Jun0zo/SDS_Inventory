@@ -968,7 +968,6 @@ export function DashboardPage() {
                   <div className="space-y-3 max-h-[300px] overflow-y-auto">
                     {expiringItems.slice(0, 5).map((item, idx) => {
                       const getUrgencyBadge = (urgency: string, daysRemaining: number) => {
-                        const isExpired = daysRemaining < 0;
                         const displayDays = Math.abs(daysRemaining);
 
                         switch (urgency) {

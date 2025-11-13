@@ -102,7 +102,7 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
 
   // Map inventory items to cells for visualization
   const cellInventoryMap = inventory?.items
-    ? mapInventoryToCells(inventory.items, item.location)
+    ? mapInventoryToCells(inventory.items)
     : new Map();
 
   const toggleCell = (floor: number, row: number, col: number) => {
