@@ -287,13 +287,20 @@ export async function createOrUpdateLayout(params: {
       };
 
       if (item.type === 'rack') {
+        // Initialize cellCapacity if not exists (all cells capacity = 1 by default)
+        const cellCapacity = item.cellCapacity || Array.from({ length: item.floors }, () =>
+          Array.from({ length: item.rows }, () =>
+            Array.from({ length: item.cols }, () => 1)
+          )
+        );
+
         // Calculate floor_capacities from cellCapacity to ensure sync
-        const floorCapacities = item.cellCapacity?.map((floor) =>
+        const floorCapacities = cellCapacity.map((floor) =>
           floor.reduce((sum, row) =>
             sum + row.reduce((rowSum, cap) => rowSum + cap, 0),
             0
           )
-        ) || item.floorCapacities || null;
+        );
 
         return {
           ...baseItem,
@@ -303,7 +310,7 @@ export async function createOrUpdateLayout(params: {
           per_floor_locations: item.perFloorLocations,
           floor_capacities: floorCapacities,
           cell_availability: item.cellAvailability || null,
-          cell_capacity: item.cellCapacity || null,
+          cell_capacity: cellCapacity,
           pillar_availability: item.pillarAvailability || null,
         };
       }
