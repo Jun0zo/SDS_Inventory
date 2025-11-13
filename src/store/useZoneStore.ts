@@ -312,33 +312,105 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
   duplicateItems: (ids) => {
     const state = get();
     const itemsToDuplicate = state.items.filter((item) => ids.includes(item.id));
-    
-    const newItems = itemsToDuplicate.map((item) => {
+
+    // Helper: Generate unique location name with suffix
+    const getUniqueLocationName = (baseName: string, existingItems: AnyItem[]): string => {
+      const existingLocations = new Set(existingItems.map(i => i.location));
+
+      // Extract base name without suffix (e.g., "ABC-01 (1)" -> "ABC-01")
+      const baseMatch = baseName.match(/^(.+?)\s*(?:\((\d+)\))?$/);
+      const baseWithoutSuffix = baseMatch ? baseMatch[1].trim() : baseName;
+
+      // Find next available number
+      let counter = 1;
+      let newName = `${baseWithoutSuffix} (${counter})`;
+      while (existingLocations.has(newName)) {
+        counter++;
+        newName = `${baseWithoutSuffix} (${counter})`;
+      }
+
+      return newName;
+    };
+
+    // Helper: Find non-overlapping position
+    const findNonOverlappingPosition = (item: AnyItem, allItems: AnyItem[]): { x: number; y: number } | null => {
+      const offsets = [
+        // Right
+        { x: item.w, y: 0 },
+        // Left
+        { x: -item.w, y: 0 },
+        // Down
+        { x: 0, y: item.h },
+        // Up
+        { x: 0, y: -item.h },
+        // Diagonal combinations
+        { x: item.w, y: item.h },
+        { x: -item.w, y: item.h },
+        { x: item.w, y: -item.h },
+        { x: -item.w, y: -item.h },
+        // Wider search
+        { x: item.w * 2, y: 0 },
+        { x: 0, y: item.h * 2 },
+        { x: item.w, y: item.h * 2 },
+        { x: item.w * 2, y: item.h },
+      ];
+
+      for (const offset of offsets) {
+        const testItem = {
+          ...item,
+          x: item.x + offset.x,
+          y: item.y + offset.y,
+        };
+
+        const errors = validateItem(testItem, state.grid, allItems);
+        if (errors.length === 0) {
+          return { x: testItem.x, y: testItem.y };
+        }
+      }
+
+      return null;
+    };
+
+    const newItems: AnyItem[] = [];
+    let currentItems = [...state.items];
+
+    for (const item of itemsToDuplicate) {
+      // Generate unique location name
+      const newLocation = getUniqueLocationName(item.location, currentItems);
+
+      // Find non-overlapping position
+      const position = findNonOverlappingPosition(item, currentItems);
+
+      if (!position) {
+        toast({
+          title: 'Cannot duplicate',
+          description: `No space available to duplicate ${item.location}`,
+          variant: 'destructive',
+        });
+        continue;
+      }
+
       const newItem = {
         ...item,
         id: crypto.randomUUID(),
-        x: item.x + 2,
-        y: item.y + 2,
+        location: newLocation,
+        x: position.x,
+        y: position.y,
       };
 
-      // Validate new position
-      const errors = validateItem(newItem, state.grid, [...state.items, newItem]);
-      if (errors.length > 0) {
-        // Try different offsets
-        newItem.x = item.x + 1;
-        newItem.y = item.y + 1;
-      }
+      newItems.push(newItem);
+      currentItems.push(newItem);
+    }
 
-      return newItem;
-    });
+    if (newItems.length > 0) {
+      set({ items: currentItems, selectedIds: newItems.map((i) => i.id) });
+      get().commit();
 
-    set({ items: [...state.items, ...newItems], selectedIds: newItems.map((i) => i.id) });
-    get().commit();
-    
-    logActivity('ZONE_DUPLICATE', { 
-      zone: state.currentZone,
-      count: newItems.length 
-    });
+      logActivity('ZONE_DUPLICATE', {
+        zone: state.currentZone,
+        count: newItems.length
+      });
+    }
   },
 
   // Selection

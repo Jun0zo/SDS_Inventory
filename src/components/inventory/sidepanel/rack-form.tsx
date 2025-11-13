@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Trash2, ChevronDown, ChevronRight, Edit3, Eye } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronRight, Edit3, Eye, Copy } from 'lucide-react';
 import { useCallback, useState, useEffect } from 'react';
 import { RackGridEditor } from './rack-grid-editor';
 
@@ -14,7 +14,7 @@ interface RackFormProps {
 }
 
 export function RackForm({ item }: RackFormProps) {
-  const { updateItem, removeItem, isEditMode } = useZoneStore();
+  const { updateItem, removeItem, duplicateItems, selectedIds, isEditMode } = useZoneStore();
   const [localLocation, setLocalLocation] = useState(item.location);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
@@ -227,7 +227,15 @@ export function RackForm({ item }: RackFormProps) {
         )}
       </div>
 
-      <div className="border-t pt-4">
+      <div className="border-t pt-4 space-y-2">
+        <Button
+          variant="outline"
+          onClick={() => duplicateItems(selectedIds)}
+          className="w-full"
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          Duplicate (Ctrl+D)
+        </Button>
         <Button
           variant="destructive"
           onClick={() => removeItem(item.id)}

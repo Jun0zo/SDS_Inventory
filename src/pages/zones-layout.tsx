@@ -245,14 +245,16 @@ export function ZonesLayoutPage() {
               {isEditMode ? 'edit mode' : 'view mode'}
             </span>
 
-            {/* Edit mode toggle button */}
-            <Button
-              variant={isEditMode ? 'outline' : 'default'}
-              size="sm"
-              onClick={() => setEditMode(!isEditMode)}
-            >
-              {isEditMode ? 'Cancel' : 'Edit Layout'}
-            </Button>
+            {/* Edit mode toggle button - only show when not in edit mode */}
+            {!isEditMode && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setEditMode(true)}
+              >
+                Edit Layout
+              </Button>
+            )}
           </div>
         </div>
         
