@@ -495,7 +495,7 @@ function getSeedItems(zone: string): AnyItem[] {
     cols: 3,
     numbering: 'col-major',
     order: 'asc',
-    perFloorLocations: [3, 3, 3],
+    perFloorLocations: false,
   };
 
   const rack2: RackItem = {
@@ -513,7 +513,7 @@ function getSeedItems(zone: string): AnyItem[] {
     cols: 3,
     numbering: 'col-major',
     order: 'asc',
-    perFloorLocations: [3, 3, 3],
+    perFloorLocations: false,
   };
 
   const flat1: FlatItem = {

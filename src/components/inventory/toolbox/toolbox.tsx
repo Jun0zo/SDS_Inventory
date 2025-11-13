@@ -23,7 +23,7 @@ export function Toolbox() {
       cols: 3,
       numbering: 'col-major',
       order: 'asc',
-      perFloorLocations: [3, 3, 3],
+      perFloorLocations: false,
     };
     addItem(rack);
   };

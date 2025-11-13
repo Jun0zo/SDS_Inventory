@@ -31,8 +31,8 @@ export interface RackItem extends PlacedItem {
   numbering?: 'col-major' | 'row-major';
   // Order direction for numbering
   order?: string;
-  // Per-floor location information
-  perFloorLocations?: any;
+  // Per-floor location naming flag
+  perFloorLocations?: boolean;
 }
 
 export interface FlatItem extends PlacedItem {
