@@ -655,7 +655,7 @@ export function InventoryViewPage() {
 
                           return (
                             <TableRow key={row.id}>
-                              <TableCell className="font-medium">{row.item_code || '-'}</TableCell>
+                              <TableCell className="font-medium">{(row as any).item_code || '-'}</TableCell>
                               <TableCell>
                                 {row.source_type === 'wms' && (row as any).zone_cd ? (
                                   <Badge variant="outline">{(row as any).zone_cd}</Badge>

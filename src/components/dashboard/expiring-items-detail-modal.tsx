@@ -84,7 +84,7 @@ export function ExpiringItemsDetailModal({
         .from('expiration_settings')
         .select('grace_period_days')
         .eq('warehouse_code', warehouses[0].code)
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
         setGracePeriod(data.grace_period_days);
