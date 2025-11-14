@@ -73,11 +73,10 @@ interface SapRawRow {
 
   // SAP Columns (used in display)
   storage_location?: string;
-  material?: string; // 실제 데이터베이스 컬럼
+  material?: string; // 실제 데이터베이스 컬럼 (Item Code)
+  batch?: string; // 실제 데이터베이스 컬럼 (Lot)
 
   // Generated columns (used)
-  item_code?: string;
-  lot_key?: string;
   split_key?: string;
   unrestricted_qty?: number;
   quality_inspection_qty?: number;
@@ -317,24 +316,34 @@ export function InventoryViewPage() {
         
         // Extract ULD for WMS rows
         const uld = row.source_type === 'wms' ? (row as WmsRawRow).uld_id : undefined;
-        
-        const matchesSearch = 
-          row.item_code?.toLowerCase().includes(query) ||
+
+        // Get item code and lot based on source type
+        const itemCode = row.source_type === 'wms' ? (row as WmsRawRow).item_code : (row as SapRawRow).material;
+        const lot = row.source_type === 'wms' ? row.lot_key : (row as SapRawRow).batch;
+
+        const matchesSearch =
+          itemCode?.toLowerCase().includes(query) ||
           (row.source_type === 'wms' && row.zone?.toLowerCase().includes(query)) ||
           (row.source_type === 'wms' && row.location?.toLowerCase().includes(query)) ||
-          row.lot_key?.toLowerCase().includes(query) ||
+          lot?.toLowerCase().includes(query) ||
           uld?.toLowerCase().includes(query);
         if (!matchesSearch) return false;
       }
-      
+
       // Zone filter
       if (zoneFilter && row.source_type === 'wms' && row.zone !== zoneFilter) return false;
-      
+
       // Item filter
-      if (itemFilter && !row.item_code?.toLowerCase().includes(itemFilter.toLowerCase())) return false;
-      
+      if (itemFilter) {
+        const itemCode = row.source_type === 'wms' ? (row as WmsRawRow).item_code : (row as SapRawRow).material;
+        if (!itemCode?.toLowerCase().includes(itemFilter.toLowerCase())) return false;
+      }
+
       // Lot filter
-      if (lotFilter && !row.lot_key?.toLowerCase().includes(lotFilter.toLowerCase())) return false;
+      if (lotFilter) {
+        const lot = row.source_type === 'wms' ? row.lot_key : (row as SapRawRow).batch;
+        if (!lot?.toLowerCase().includes(lotFilter.toLowerCase())) return false;
+      }
       
       // Location filter
       if (locationFilter && row.source_type === 'wms' && !row.location?.toLowerCase().includes(locationFilter.toLowerCase())) return false;
@@ -767,7 +776,7 @@ export function InventoryViewPage() {
                       <TableBody>
                         {paginatedSapData.map((row) => (
                           <TableRow key={row.id}>
-                            <TableCell className="font-medium">{row.item_code || '-'}</TableCell>
+                            <TableCell className="font-medium">{(row as SapRawRow).material || '-'}</TableCell>
                             {filteredSapData.some(r => r.source_type === 'sap' && (r as SapRawRow).storage_location) && (
                               <TableCell>
                                 {row.source_type === 'sap' && (row as SapRawRow).storage_location ? (
@@ -776,7 +785,7 @@ export function InventoryViewPage() {
                               </TableCell>
                             )}
                             <TableCell className="text-sm text-muted-foreground">
-                              {row.lot_key || '-'}
+                              {(row as SapRawRow).batch || '-'}
                             </TableCell>
                             <TableCell className="text-right font-mono">
                               {(row as SapRawRow).unrestricted_qty?.toLocaleString() || '0'}

@@ -1104,30 +1104,43 @@ SELECT
   inb_date,
   item_nm,
   uld_id,
-  -- Pre-calculate days remaining (can be negative for expired items)
-  EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP))::INTEGER AS days_remaining,
-  -- Categorize urgency (including expired items)
+  -- Calculate days_remaining, return NULL if valid_date is NULL
   CASE
-    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) < 0 THEN 'expired'
-    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 7 THEN 'critical'
-    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 14 THEN 'high'
-    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 30 THEN 'medium'
-    ELSE 'low'
+    WHEN valid_date IS NOT NULL THEN
+      EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP))::INTEGER
+    ELSE
+      NULL
+  END AS days_remaining,
+  -- Calculate urgency, use 'no_expiry' if valid_date is NULL
+  CASE
+    WHEN valid_date IS NULL THEN 'no_expiry'::text
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) < 0 THEN 'expired'::text
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 7 THEN 'critical'::text
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 14 THEN 'high'::text
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 30 THEN 'medium'::text
+    ELSE 'low'::text
   END AS urgency,
   CURRENT_TIMESTAMP AS last_updated
 FROM public.wms_raw_rows
 WHERE split_key IS NOT NULL
-  AND valid_date IS NOT NULL
-  AND valid_date >= CURRENT_DATE - INTERVAL '30 days'  -- Include items expired up to 30 days ago
-  AND valid_date <= CURRENT_DATE + INTERVAL '90 days'  -- Look ahead 90 days
+  -- Include items with valid_date OR items without valid_date
+  AND (
+    valid_date IS NULL  -- Items without expiry date
+    OR (
+      -- Items with expiry date within range
+      valid_date >= CURRENT_DATE - INTERVAL '30 days'  -- Include items expired up to 30 days ago
+      AND valid_date <= CURRENT_DATE + INTERVAL '90 days'  -- Look ahead 90 days
+    )
+  )
 ORDER BY
   CASE
-    WHEN valid_date < CURRENT_DATE THEN 0  -- Expired items first
-    ELSE 1
+    WHEN valid_date IS NULL THEN 2  -- No expiry items sort last
+    WHEN valid_date < CURRENT_DATE THEN 0  -- Expired items sort first
+    ELSE 1  -- Expiring items sort second
   END,
-  valid_date ASC,
+  valid_date NULLS LAST,
   available_qty DESC
-LIMIT 500;  -- Increased limit to include expired items
+LIMIT 500;  -- Increased limit to include expired items and no-expiry items
 
 -- Create indexes on materialized view
 CREATE INDEX idx_expiring_items_mv_factory_location
@@ -1146,8 +1159,9 @@ CREATE INDEX idx_expiring_items_mv_days_remaining
 GRANT SELECT ON public.expiring_items_mv TO authenticated, anon;
 
 COMMENT ON MATERIALIZED VIEW public.expiring_items_mv IS
-  'Pre-calculated list of items expiring within 90 days (top 200 by expiry date).
-   Includes pre-calculated days_remaining and urgency categorization.
+  'Pre-calculated list of items expiring within 90 days, plus items with no expiry date (top 500).
+   Includes pre-calculated days_remaining (NULL for items without expiry) and urgency categorization.
+   Urgency values: expired, critical, high, medium, low, no_expiry.
    Refresh this view daily or after WMS data sync.';
 
 -- ========================================

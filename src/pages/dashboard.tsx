@@ -912,12 +912,12 @@ export function DashboardPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Timer className="h-5 w-5" />
-                    만료 예정 품목
+                    {t('expiringItems')}
                   </CardTitle>
-                  <CardDescription>유효기한이 임박하거나 만료된 품목</CardDescription>
+                  <CardDescription>{t('expiringItemsDescription')}</CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setExpiringItemsModalOpen(true)}>
-                  자세히 보기
+                  {t('viewDetails')}
                 </Button>
               </div>
             </CardHeader>
@@ -942,22 +942,22 @@ export function DashboardPage() {
                         <>
                           {counts['expired'] > 0 && (
                             <Badge variant="destructive" className="text-xs">
-                              만료: {counts['expired']}
+                              {t('expired')}: {counts['expired']}
                             </Badge>
                           )}
                           {counts['critical'] > 0 && (
                             <Badge className="text-xs bg-red-500">
-                              긴급: {counts['critical']}
+                              {t('critical')}: {counts['critical']}
                             </Badge>
                           )}
                           {counts['high'] > 0 && (
                             <Badge className="text-xs bg-orange-500">
-                              높음: {counts['high']}
+                              {t('high')}: {counts['high']}
                             </Badge>
                           )}
                           {counts['medium'] > 0 && (
                             <Badge className="text-xs bg-yellow-500">
-                              보통: {counts['medium']}
+                              {t('medium')}: {counts['medium']}
                             </Badge>
                           )}
                         </>
@@ -967,38 +967,46 @@ export function DashboardPage() {
 
                   <div className="space-y-3 max-h-[300px] overflow-y-auto">
                     {expiringItems.slice(0, 5).map((item, idx) => {
-                      const getUrgencyBadge = (urgency: string, daysRemaining: number) => {
-                        const displayDays = Math.abs(daysRemaining);
+                      const getUrgencyBadge = (urgency: string, daysRemaining: number | null) => {
+                        if (urgency === 'no_expiry' || daysRemaining === null || daysRemaining === undefined) {
+                          return (
+                            <Badge variant="outline" className="text-xs shrink-0 bg-gray-100">
+                              {t('noExpiry')}
+                            </Badge>
+                          );
+                        }
+
+                        const displayDays = isNaN(daysRemaining) ? 0 : Math.abs(daysRemaining);
 
                         switch (urgency) {
                           case 'expired':
                             return (
                               <Badge variant="destructive" className="text-xs shrink-0">
-                                만료 {displayDays}일 경과
+                                {t('expiredElapsed')} {displayDays} {t('daysElapsed')}
                               </Badge>
                             );
                           case 'critical':
                             return (
                               <Badge className="text-xs shrink-0 bg-red-500">
-                                {displayDays}일 남음
+                                {displayDays} {t('daysRemaining')}
                               </Badge>
                             );
                           case 'high':
                             return (
                               <Badge className="text-xs shrink-0 bg-orange-500">
-                                {displayDays}일 남음
+                                {displayDays} {t('daysRemaining')}
                               </Badge>
                             );
                           case 'medium':
                             return (
                               <Badge className="text-xs shrink-0 bg-yellow-500">
-                                {displayDays}일 남음
+                                {displayDays} {t('daysRemaining')}
                               </Badge>
                             );
                           default:
                             return (
                               <Badge variant="outline" className="text-xs shrink-0">
-                                {displayDays}일 남음
+                                {displayDays} {t('daysRemaining')}
                               </Badge>
                             );
                         }
@@ -1032,7 +1040,7 @@ export function DashboardPage() {
                 </>
               ) : (
                 <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-                  만료 예정 품목 없음
+                  {t('noExpiringItems')}
                 </div>
               )}
             </CardContent>

@@ -35,9 +35,9 @@ export interface ExpiringItem {
   location: string;
   lot_key: string;
   available_qty: number;
-  valid_date: string;
-  days_remaining: number;
-  urgency: 'expired' | 'critical' | 'high' | 'medium' | 'low';
+  valid_date: string | null;
+  days_remaining: number | null;
+  urgency: 'expired' | 'critical' | 'high' | 'medium' | 'low' | 'no_expiry';
   uld_id?: string;
 }
 
@@ -500,10 +500,12 @@ export async function getExpiringItems(warehouseIds: string[], daysAhead = 30): 
       item_code: row.item_code || 'N/A',
       location: row.location || 'N/A',  // This is now cell_no from MV
       lot_key: row.lot_key || 'N/A',
-      available_qty: Number(row.available_qty) || 0,
-      valid_date: row.valid_date,
-      days_remaining: row.days_remaining,  // Already calculated in MV
-      urgency: (row.urgency as 'expired' | 'critical' | 'high' | 'medium' | 'low') || 'low',
+      available_qty: isNaN(Number(row.available_qty)) ? 0 : Number(row.available_qty),
+      valid_date: row.valid_date || null,
+      days_remaining: row.days_remaining !== null && row.days_remaining !== undefined
+        ? (isNaN(Number(row.days_remaining)) ? null : Number(row.days_remaining))
+        : null,
+      urgency: (row.urgency as 'expired' | 'critical' | 'high' | 'medium' | 'low' | 'no_expiry') || 'low',
       uld_id: row.uld_id || undefined,
     })) || [];
 
