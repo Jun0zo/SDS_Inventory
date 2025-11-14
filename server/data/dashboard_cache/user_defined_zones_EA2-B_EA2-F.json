@@ -1,16 +1,16 @@
 {
-  "cached_at": "2025-11-10T18:55:56.877550",
+  "cached_at": "2025-11-11T06:57:50.726558",
   "data": [
     {
       "zone_id": "af06f05e-1098-4464-8c80-1b9aa62045bc",
       "zone_code": "test-zone",
       "zone_name": "Test Zone",
       "warehouse_code": "EA2-F",
-      "current_quantity": 48,
-      "total_capacity": 96,
-      "utilization_percentage": 50.0,
-      "avg_location_utilization": 50.0,
-      "item_count": 2
+      "current_quantity": 158,
+      "total_capacity": 143,
+      "utilization_percentage": 100,
+      "avg_location_utilization": 73.45,
+      "item_count": 4
     }
   ]
 }

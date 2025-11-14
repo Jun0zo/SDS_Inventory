@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useWarehouseStore } from '@/store/useWarehouseStore';
-import { useSheetSourcesStore } from '@/store/useSheetSourcesStore';
 import { useWarehouseBindingStore } from '@/store/useWarehouseBindingStore';
 import { Warehouse } from '@/types/warehouse';
 import {
@@ -42,8 +41,7 @@ interface WarehouseManagementModalProps {
 
 export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManagementModalProps) {
   const { warehouses, remove } = useWarehouseStore();
-  const { wmsSources, sapSources } = useSheetSourcesStore();
-  const { bindings, getBinding, loadBindings } = useWarehouseBindingStore();
+  const { getBinding, loadBindings } = useWarehouseBindingStore();
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);

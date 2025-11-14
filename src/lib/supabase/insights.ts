@@ -1,6 +1,8 @@
 import { supabase } from './client';
 
-const BASE_URL = import.meta.env.VITE_ETL_BASE_URL || 'http://localhost:8787';
+// Use relative path in production (Vercel), localhost in development
+const BASE_URL = import.meta.env.VITE_ETL_BASE_URL 
+  || (import.meta.env.PROD ? '' : 'http://localhost:8787');
 
 // Quantity column mapping (Google Sheet header → PostgreSQL column)
 const WMS_QUANTITY_MAP: Record<string, string> = {
@@ -33,8 +35,9 @@ export interface ExpiringItem {
   location: string;
   lot_key: string;
   available_qty: number;
-  valid_date: string;
-  days_remaining: number;
+  valid_date: string | null;
+  days_remaining: number | null;
+  urgency: 'expired' | 'critical' | 'high' | 'medium' | 'low' | 'no_expiry';
   uld_id?: string;
 }
 
@@ -459,7 +462,7 @@ export async function getExpiringItems(warehouseIds: string[], daysAhead = 30): 
 
     if (warehouseIds.length > 0) {
       for (const warehouseId of warehouseIds) {
-        const { data: binding, error: bindingError } = await supabase
+        const { data: binding } = await supabase
           .from('warehouse_bindings')
           .select('source_bindings')
           .eq('warehouse_id', warehouseId)
@@ -497,9 +500,12 @@ export async function getExpiringItems(warehouseIds: string[], daysAhead = 30): 
       item_code: row.item_code || 'N/A',
       location: row.location || 'N/A',  // This is now cell_no from MV
       lot_key: row.lot_key || 'N/A',
-      available_qty: Number(row.available_qty) || 0,
-      valid_date: row.valid_date,
-      days_remaining: row.days_remaining,  // Already calculated in MV
+      available_qty: isNaN(Number(row.available_qty)) ? 0 : Number(row.available_qty),
+      valid_date: row.valid_date || null,
+      days_remaining: row.days_remaining !== null && row.days_remaining !== undefined
+        ? (isNaN(Number(row.days_remaining)) ? null : Number(row.days_remaining))
+        : null,
+      urgency: (row.urgency as 'expired' | 'critical' | 'high' | 'medium' | 'low' | 'no_expiry') || 'low',
       uld_id: row.uld_id || undefined,
     })) || [];
 
@@ -521,7 +527,7 @@ export async function getSlowMovingItems(warehouseIds: string[], minDays = 90): 
 
     if (warehouseIds.length > 0) {
       for (const warehouseId of warehouseIds) {
-        const { data: binding, error: bindingError } = await supabase
+        const { data: binding } = await supabase
           .from('warehouse_bindings')
           .select('source_bindings')
           .eq('warehouse_id', warehouseId)
@@ -582,16 +588,11 @@ export async function getInventoryDiscrepancies(warehouseIds: string[], minDiscr
 
     if (warehouseIds.length > 0) {
       for (const warehouseId of warehouseIds) {
-        const { data: binding, error: bindingError } = await supabase
+        const { data: binding } = await supabase
           .from('warehouse_bindings')
           .select('source_bindings')
           .eq('warehouse_id', warehouseId)
           .single();
-
-        if (bindingError) {
-          console.warn(`Failed to get binding for warehouse ${warehouseId}:`, bindingError);
-          continue;
-        }
 
         if (binding?.source_bindings) {
           // Extract split_values from source_bindings
@@ -690,7 +691,7 @@ export async function getStockStatusDistribution(warehouseCodes: string[]): Prom
 
     if (warehouseIds.length > 0) {
       for (const warehouseId of warehouseIds) {
-        const { data: binding, error: bindingError } = await supabase
+        const { data: binding } = await supabase
           .from('warehouse_bindings')
           .select('source_bindings')
           .eq('warehouse_id', warehouseId)
@@ -764,7 +765,7 @@ export async function getStockStatusDistribution(warehouseCodes: string[]): Prom
 export async function getMaterialStockInfo(warehouseCodes: string[]): Promise<Map<string, number>> {
   try {
     // Get inventory stats for all warehouses
-    const stats = await getInventoryStats(warehouseCodes);
+    await getInventoryStats(warehouseCodes);
 
     // For now, return a mock map - in reality you'd need to get per-material stock
     // This is a simplified version. In production, you'd need to get actual stock per material
@@ -782,7 +783,7 @@ export async function getMaterialStockInfo(warehouseCodes: string[]): Promise<Ma
 /**
  * Get unique material codes and names from materials table for BOM selection
  */
-export async function getMaterials(warehouseCodes: string[]): Promise<Array<{code: string, name: string, unit: string, majorCategory: string, minorCategory: string}>> {
+export async function getMaterials(_warehouseCodes: string[]): Promise<Array<{code: string, name: string, unit: string, majorCategory: string, minorCategory: string}>> {
   try {
     // Get materials from the materials catalog table
     const { data: materialsData, error: materialsError } = await supabase
@@ -857,7 +858,7 @@ export async function getProductionLinesByIds(warehouseIds: string[]): Promise<A
 
     const productionLines = data?.map(line => ({
       id: line.id,
-      name: line.name,
+      name: line.line_name,
       warehouse_id: line.warehouse_id,
       daily_production_capacity: line.daily_production_capacity,
       materials: line.production_line_materials || []
@@ -898,7 +899,7 @@ export async function getMaterialStock(warehouseCodes: string[]): Promise<Map<st
     const splitKeys: string[] = [];
 
     for (const warehouseId of warehouseIds) {
-      const { data: binding, error: bindingError } = await supabase
+      const { data: binding } = await supabase
         .from('warehouse_bindings')
         .select('source_bindings')
         .eq('warehouse_id', warehouseId)

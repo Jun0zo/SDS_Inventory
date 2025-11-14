@@ -1,0 +1,119 @@
+
+> warehouse-inventory-manager@1.0.0 build
+> tsc && vite build
+
+src/components/dashboard/stock-status-detail-modal.tsx(18,20): error TS6133: 'Package' is declared but its value is never read.
+src/components/dashboard/stock-status-detail-modal.tsx(51,3): error TS6133: 'loading' is declared but its value is never read.
+src/components/dashboard/stock-status-detail-modal.tsx(82,83): error TS6133: 'index' is declared but its value is never read.
+src/components/dashboard/stock-status-detail-modal.tsx(145,9): error TS6133: 'getStatusIcon' is declared but its value is never read.
+src/components/dashboard/stock-status-detail-modal.tsx(152,9): error TS6133: 'getStatusColor' is declared but its value is never read.
+src/components/IngestPanel.tsx(17,1): error TS6133: 'Skeleton' is declared but its value is never read.
+src/components/IngestPanel.tsx(18,1): error TS6133: 'Progress' is declared but its value is never read.
+src/components/IngestPanel.tsx(23,3): error TS6133: 'CheckCircle2' is declared but its value is never read.
+src/components/IngestPanel.tsx(24,3): error TS6133: 'XCircle' is declared but its value is never read.
+src/components/IngestPanel.tsx(25,3): error TS6133: 'Clock' is declared but its value is never read.
+src/components/IngestPanel.tsx(26,3): error TS6133: 'Package' is declared but its value is never read.
+src/components/IngestPanel.tsx(89,25): error TS18048: 'currentBinding.wms_source_ids.length' is possibly 'undefined'.
+src/components/IngestPanel.tsx(90,25): error TS18048: 'currentBinding.sap_source_ids.length' is possibly 'undefined'.
+src/components/IngestPanel.tsx(157,22): error TS18048: 'currentBinding.wms_source_ids' is possibly 'undefined'.
+src/components/IngestPanel.tsx(163,22): error TS18048: 'currentBinding.sap_source_ids' is possibly 'undefined'.
+src/components/inventory/canvas/canvas.tsx(32,9): error TS6133: 'warehouseId' is declared but its value is never read.
+src/components/inventory/canvas/canvas.tsx(35,10): error TS6133: 'componentStockUpdates' is declared but its value is never read.
+src/components/inventory/canvas/canvas.tsx(35,33): error TS6133: 'setComponentStockUpdates' is declared but its value is never read.
+src/components/inventory/canvas/canvas.tsx(305,56): error TS6133: 'minimapWidth' is declared but its value is never read.
+src/components/inventory/canvas/canvas.tsx(305,78): error TS6133: 'minimapHeight' is declared but its value is never read.
+src/components/inventory/canvas/item-view.tsx(52,9): error TS6133: 'hasInventory' is declared but its value is never read.
+src/components/inventory/sidepanel/rack-form.tsx(15,35): error TS6133: 'rotateSelected' is declared but its value is never read.
+src/components/inventory/sidepanel/rack-form.tsx(53,97): error TS2339: Property 'value' does not exist on type 'EventTarget'.
+src/components/inventory/sidepanel/rack-form.tsx(60,75): error TS2339: Property 'value' does not exist on type 'EventTarget'.
+src/components/inventory/sidepanel/sidepanel.tsx(18,1): error TS6133: 'supabase' is declared but its value is never read.
+src/components/inventory/sidepanel/sidepanel.tsx(151,21): error TS6133: 'key' is declared but its value is never read.
+src/components/inventory/sidepanel/sidepanel.tsx(152,31): error TS6133: 'index' is declared but its value is never read.
+src/components/inventory/sidepanel/sidepanel.tsx(167,25): error TS6133: 'index' is declared but its value is never read.
+src/components/inventory/sidepanel/sidepanel.tsx(471,44): error TS7006: Parameter '_entry' implicitly has an 'any' type.
+src/components/inventory/sidepanel/sidepanel.tsx(471,52): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/components/inventory/sidepanel/sidepanel.tsx(490,38): error TS7006: Parameter 'lot' implicitly has an 'any' type.
+src/components/inventory/sidepanel/sidepanel.tsx(490,43): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/components/inventory/sidepanel/sidepanel.tsx(552,43): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/inventory/sidepanel/sidepanel.tsx(634,43): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/inventory/sidepanel/sidepanel.tsx(755,39): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/layout/page-header.tsx(10,51): error TS6133: 'sticky' is declared but its value is never read.
+src/components/ui/checkbox.tsx(3,17): error TS6133: 'Minus' is declared but its value is never read.
+src/components/ui/collapsible.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/ui/language-selector.tsx(1,1): error TS6133: 'useState' is declared but its value is never read.
+src/components/warehouse/production-line-dialog.tsx(46,10): error TS6133: 'newMaterialName' is declared but its value is never read.
+src/components/warehouse/production-line-dialog.tsx(48,10): error TS6133: 'newMaterialUnit' is declared but its value is never read.
+src/components/warehouse/production-line-management-dialog.tsx(19,10): error TS6133: 'loading' is declared but its value is never read.
+src/components/warehouse/warehouse-binding-dialog.tsx(28,3): error TS6133: 'AlertCircle' is declared but its value is never read.
+src/components/warehouse/warehouse-binding-dialog.tsx(30,3): error TS6133: 'Unlink' is declared but its value is never read.
+src/components/warehouse/warehouse-binding-dialog.tsx(47,5): error TS2339: Property 'currentBinding' does not exist on type 'State & Actions'.
+src/components/warehouse/warehouse-binding-dialog.tsx(49,5): error TS2339: Property 'saving' does not exist on type 'State & Actions'.
+src/components/warehouse/warehouse-binding-dialog.tsx(50,5): error TS2339: Property 'loadBinding' does not exist on type 'State & Actions'.
+src/components/warehouse/warehouse-binding-dialog.tsx(51,5): error TS2339: Property 'saveBinding' does not exist on type 'State & Actions'.
+src/components/warehouse/warehouse-binding-dialog.tsx(52,5): error TS2339: Property 'clearCurrentBinding' does not exist on type 'State & Actions'.
+src/components/warehouse/warehouse-edit-dialog.tsx(8,60): error TS6133: 'SplitValuesResponse' is declared but its value is never read.
+src/components/warehouse/warehouse-edit-dialog.tsx(23,1): error TS6133: 'ScrollArea' is declared but its value is never read.
+src/components/warehouse/warehouse-edit-dialog.tsx(31,46): error TS6133: 'AlertCircle' is declared but its value is never read.
+src/components/warehouse/warehouse-management-modal.tsx(45,9): error TS6198: All destructured elements are unused.
+src/components/warehouse/warehouse-management-modal.tsx(46,11): error TS6133: 'bindings' is declared but its value is never read.
+src/components/warehouse/warehouse-multi-select.tsx(1,20): error TS6133: 'useEffect' is declared but its value is never read.
+src/components/warehouse/warehouse-multi-select.tsx(19,1): error TS6133: 'Warehouse' is declared but its value is never read.
+src/components/WmsSyncPanel.tsx(35,5): error TS6133: 'runSync' is declared but its value is never read.
+src/components/WmsSyncPanel.tsx(115,9): error TS6133: 'warehouseInfo' is declared but its value is never read.
+src/components/zone/zone-management-dialog.tsx(170,15): error TS2339: Property 'grid' does not exist on type '{ layout: Layout | null; items: AnyItem[]; }'.
+src/lib/__tests__/geometry.spec.ts(6,3): error TS6133: 'wouldCollide' is declared but its value is never read.
+src/lib/__tests__/validation.spec.ts(3,3): error TS2724: '"../validation"' has no exported member named 'validateLocationCode'. Did you mean 'validateRotation'?
+src/lib/__tests__/validation.spec.ts(10,20): error TS6133: 'FlatItem' is declared but its value is never read.
+src/lib/etl-location.ts(37,3): error TS6133: 'warehouseCode' is declared but its value is never read.
+src/lib/etl-location.ts(103,3): error TS6133: 'warehouseCode' is declared but its value is never read.
+src/lib/supabase/insights.ts(462,39): error TS6133: 'bindingError' is declared but its value is never read.
+src/lib/supabase/insights.ts(524,39): error TS6133: 'bindingError' is declared but its value is never read.
+src/lib/supabase/insights.ts(693,39): error TS6133: 'bindingError' is declared but its value is never read.
+src/lib/supabase/insights.ts(767,11): error TS6133: 'stats' is declared but its value is never read.
+src/lib/supabase/insights.ts(785,36): error TS6133: 'warehouseCodes' is declared but its value is never read.
+src/lib/supabase/insights.ts(901,37): error TS6133: 'bindingError' is declared but its value is never read.
+src/lib/supabase/layouts.ts(195,9): error TS6133: 'user' is declared but its value is never read.
+src/lib/supabase/layouts.ts(254,9): error TS6133: 'layout' is declared but its value is never read.
+src/lib/supabase/layouts.ts(456,34): error TS18047: 'user.user' is possibly 'null'.
+src/lib/supabase/layouts.ts(456,63): error TS18047: 'user.user' is possibly 'null'.
+src/lib/supabase/layouts.ts(462,16): error TS18047: 'user.user' is possibly 'null'.
+src/lib/supabase/layouts.ts(469,47): error TS18047: 'error' is possibly 'null'.
+src/pages/dashboard.tsx(19,80): error TS6133: 'getStockStatusLabel' is declared but its value is never read.
+src/pages/inventory.tsx(23,5): error TS6133: 'canUndo' is declared but its value is never read.
+src/pages/inventory.tsx(24,5): error TS6133: 'canRedo' is declared but its value is never read.
+src/pages/materials.tsx(81,10): error TS6133: 'editingItemCode' is declared but its value is never read.
+src/pages/materials.tsx(81,27): error TS6133: 'setEditingItemCode' is declared but its value is never read.
+src/pages/settings.tsx(20,3): error TS6133: 'User' is declared but its value is never read.
+src/pages/settings.tsx(26,3): error TS6133: 'TestTube2' is declared but its value is never read.
+src/pages/settings.tsx(27,3): error TS6133: 'RefreshCw' is declared but its value is never read.
+src/pages/settings.tsx(31,3): error TS6133: 'X' is declared but its value is never read.
+src/pages/settings.tsx(45,11): error TS6133: 'config' is declared but its value is never read.
+src/pages/settings.tsx(46,9): error TS6133: 'warehouses' is declared but its value is never read.
+src/pages/zones-layout.tsx(12,1): error TS6192: All imports in import declaration are unused.
+src/pages/zones-layout.tsx(13,1): error TS6133: 'toast' is declared but its value is never read.
+src/pages/zones-layout.tsx(15,3): error TS6133: 'Edit' is declared but its value is never read.
+src/pages/zones-layout.tsx(23,3): error TS6133: 'Plus' is declared but its value is never read.
+src/pages/zones-layout.tsx(33,5): error TS6133: 'grid' is declared but its value is never read.
+src/pages/zones-layout.tsx(34,5): error TS6133: 'setGrid' is declared but its value is never read.
+src/pages/zones-layout.tsx(35,5): error TS6133: 'toggleShowGrid' is declared but its value is never read.
+src/pages/zones-layout.tsx(36,5): error TS6133: 'toggleSnap' is declared but its value is never read.
+src/pages/zones-layout.tsx(50,5): error TS6133: 'items' is declared but its value is never read.
+src/store/useLayoutStore.ts(121,60): error TS2345: Argument of type '(RackItem | FlatItem | { type: "flat" | "rack"; floors?: number | undefined; rows: number; cols: number; w: number; h: number; floorCapacities?: number[] | undefined; ... 9 more ...; maxCapacity?: number | undefined; })[]' is not assignable to parameter of type 'AnyItem[]'.
+  Type 'RackItem | FlatItem | { type: "flat" | "rack"; floors?: number | undefined; rows: number; cols: number; w: number; h: number; floorCapacities?: number[] | undefined; ... 9 more ...; maxCapacity?: number | undefined; }' is not assignable to type 'AnyItem'.
+    Type '{ type: "flat" | "rack"; floors?: number | undefined; rows: number; cols: number; w: number; h: number; floorCapacities?: number[] | undefined; numbering?: "row-major" | "col-major" | undefined; order?: "asc" | "desc" | undefined; ... 7 more ...; maxCapacity?: number; }' is not assignable to type 'AnyItem'.
+      Type '{ type: "flat" | "rack"; floors?: number | undefined; rows: number; cols: number; w: number; h: number; floorCapacities?: number[] | undefined; numbering?: "row-major" | "col-major" | undefined; order?: "asc" | "desc" | undefined; ... 7 more ...; maxCapacity?: number; }' is not assignable to type 'RackItem'.
+        Types of property 'type' are incompatible.
+          Type '"flat" | "rack"' is not assignable to type '"rack"'.
+            Type '"flat"' is not assignable to type '"rack"'.
+src/store/useLayoutStore.ts(313,28): error TS2339: Property 'warehouseId' does not exist on type 'LayoutState'.
+src/store/useLocationInventoryStore.ts(122,79): error TS6133: 'get' is declared but its value is never read.
+src/store/useLocationInventoryStore_new.ts(16,3): error TS6133: 'warehouseCode' is declared but its value is never read.
+src/store/useLocationInventoryStore_new.ts(60,3): error TS6133: 'warehouseCode' is declared but its value is never read.
+src/store/useLocationInventoryStore_new.ts(107,79): error TS6133: 'get' is declared but its value is never read.
+src/store/useLocationInventoryStore_old.ts(109,11): error TS6133: 'cacheKeys' is declared but its value is never read.
+src/store/useServerConfig.ts(35,62): error TS6133: 'get' is declared but its value is never read.
+src/store/useSyncStore.ts(12,3): error TS6133: 'ApiResponse' is declared but its value is never read.
+src/store/useWarehouseBindingStore.ts(4,3): error TS6133: 'getWarehouseBinding' is declared but its value is never read.
+src/store/useZoneStore.ts(9,3): error TS6133: 'getWarehouseZones' is declared but its value is never read.
+src/store/useZoneStore.ts(113,10): error TS6133: 'loadZoneSelection' is declared but its value is never read.
+src/store/useZoneStore.ts(137,11): error TS6133: 'state' is declared but its value is never read.

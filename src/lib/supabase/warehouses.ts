@@ -74,7 +74,7 @@ export async function createWarehouse(
 
   if (MOCK) {
     const existing = readMock();
-    
+
     // Check for duplicate code
     if (existing.some(w => w.code === input.code)) {
       throw new Error(`Warehouse with code ${input.code} already exists`);
@@ -85,18 +85,15 @@ export async function createWarehouse(
       id: crypto.randomUUID(),
       created_at: new Date().toISOString(),
     };
-    
+
     writeMock([...existing, row]);
     return row;
   }
 
-  const { data: user } = await supabase.auth.getUser();
-  
   const { data, error } = await supabase
     .from('warehouses')
     .insert({
       ...input,
-      created_by: user.user?.id,
     })
     .select('*')
     .single();

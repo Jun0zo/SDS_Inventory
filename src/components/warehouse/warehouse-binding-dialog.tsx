@@ -25,9 +25,7 @@ import {
   Building2,
   FileSpreadsheet,
   Loader2,
-  AlertCircle,
   Link,
-  Unlink,
   Database,
 } from 'lucide-react';
 import type { Warehouse } from '@/types/warehouse';

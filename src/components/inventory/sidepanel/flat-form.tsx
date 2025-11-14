@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { useCallback, useState, useEffect } from 'react';
 
 interface FlatFormProps {
@@ -12,7 +12,7 @@ interface FlatFormProps {
 }
 
 export function FlatForm({ item }: FlatFormProps) {
-  const { updateItem, removeItem } = useZoneStore();
+  const { updateItem, removeItem, duplicateItems, selectedIds } = useZoneStore();
   const [localLocation, setLocalLocation] = useState(item.location);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
@@ -110,12 +110,20 @@ export function FlatForm({ item }: FlatFormProps) {
           id="maxCapacity"
           type="number"
           min="0"
-          value={item.maxCapacity || ''}
+          value={item.maxCapacity ?? 36}
           onChange={(e) => handleUpdate({ maxCapacity: parseInt(e.target.value) || 0 })}
         />
       </div>
 
-      <div className="border-t pt-4">
+      <div className="border-t pt-4 space-y-2">
+        <Button
+          variant="outline"
+          onClick={() => duplicateItems(selectedIds)}
+          className="w-full"
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          Duplicate (Ctrl+D)
+        </Button>
         <Button
           variant="destructive"
           onClick={() => removeItem(item.id)}

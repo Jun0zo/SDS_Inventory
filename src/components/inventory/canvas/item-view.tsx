@@ -2,7 +2,7 @@ import { AnyItem } from '@/types/inventory';
 import { useZoneStore } from '@/store/useZoneStore';
 import { cn } from '@/lib/cn';
 import { applyRotationWH } from '@/lib/geometry';
-import { LocationInventorySummary } from '@/lib/etl-location';
+import { LocationInventorySummary } from '@/store/useLocationInventoryStore';
 import { calculateCapacity, calculateUtilization, getUtilizationColor } from '@/lib/capacity';
 import { Package, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -48,9 +48,6 @@ export function ItemView({ item, onSelect, inventory }: ItemViewProps) {
   const currentCount = inventory?.total_items || 0; // Use row count instead of quantity
   const utilization = inventory?.utilization_percentage || calculateUtilization(currentCount, capacity);
   const utilizationColor = getUtilizationColor(utilization);
-
-  const hasInventory = inventory && inventory.total_items > 0;
-  
 
   // Handle resize mode mouse events
   useEffect(() => {

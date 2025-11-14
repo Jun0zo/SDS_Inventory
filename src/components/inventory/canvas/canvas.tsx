@@ -29,10 +29,7 @@ export function Canvas() {
 
   const { getSelectedWarehouses } = useWarehouseStore();
   const selectedWarehouses = getSelectedWarehouses();
-  const warehouseId = selectedWarehouses.length === 1 ? selectedWarehouses[0].id : null;
   const warehouseCode = selectedWarehouses.length === 1 ? selectedWarehouses[0].code : null;
-
-  const [componentStockUpdates, setComponentStockUpdates] = useState<Record<string, number>>({});
   const [allInventoryData, setAllInventoryData] = useState<Record<string, any>>({});
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -258,8 +255,6 @@ export function Canvas() {
   }, [isPanning]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    const { isEditMode } = useZoneStore.getState();
-
     if (isPanning || e.button === 1) { // Middle mouse button or space+drag
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     } else if (e.button === 0) {
@@ -268,12 +263,10 @@ export function Canvas() {
       const isItemClick = target.closest('[data-item-id]') !== null;
 
       if (!isItemClick) {
-        // Clicked on empty canvas area - clear selection and start panning in view mode
+        // Clicked on empty canvas area - clear selection and start panning
         clearSelection();
-        if (!isEditMode) {
-          setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-          setIsPanning(true);
-        }
+        setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+        setIsPanning(true);
       }
     }
   };
@@ -302,7 +295,7 @@ export function Canvas() {
   };
 
   // Minimap viewport drag handlers
-  const handleMinimapMouseDown = (e: React.MouseEvent, minimapWidth: number, minimapHeight: number) => {
+  const handleMinimapMouseDown = (e: React.MouseEvent, _minimapWidth: number, _minimapHeight: number) => {
     e.preventDefault();
     e.stopPropagation();
     setIsMinimapDragging(true);
@@ -335,13 +328,23 @@ export function Canvas() {
     setMinimapDragStart({ x: e.clientX, y: e.clientY });
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = -e.deltaY * 0.001;
-      setZoom((prev) => Math.max(0.5, Math.min(2, prev + delta)));
+  // Wheel event handler - use useEffect to add passive: false
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    const delta = -e.deltaY * 0.001;
+    setZoom((prev) => Math.max(0.5, Math.min(2, prev + delta)));
+  }, []);
+
+  // Add wheel event listener with passive: false
+  useEffect(() => {
+    const canvasElement = canvasRef.current;
+    if (canvasElement) {
+      canvasElement.addEventListener('wheel', handleWheel, { passive: false });
+      return () => {
+        canvasElement.removeEventListener('wheel', handleWheel);
+      };
     }
-  };
+  }, [handleWheel]);
 
   // Zoom control functions
   const handleZoomIn = () => {
@@ -504,7 +507,6 @@ export function Canvas() {
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onWheel={handleWheel}
       onClick={(e) => {
         // Clear selection when clicking on empty canvas area (not during minimap dragging)
         if (e.target === e.currentTarget && !isMinimapDragging) {

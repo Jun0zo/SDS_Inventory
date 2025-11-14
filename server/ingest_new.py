@@ -541,6 +541,17 @@ async def ingest_warehouse_data(
             import traceback
             debug_logs.append(traceback.format_exc())
 
+        # Refresh all materialized views after data ingestion
+        debug_logs.append(f"🔄 Refreshing all materialized views...")
+        try:
+            result_mv = supabase.rpc('refresh_all_materialized_views').execute()
+            debug_logs.append(f"✅ COMPLETED: All materialized views refreshed successfully")
+            if result_mv.data:
+                debug_logs.append(f"   MV Refresh Results: {result_mv.data}")
+        except Exception as e:
+            debug_logs.append(f"⚠️ WARNING: Materialized view refresh failed: {e}")
+            # Don't raise - allow ingestion to succeed even if MV refresh fails
+
     else:
         debug_logs.append(f"❌ Conditions NOT met for {warehouse_code}, skipping snapshot updates")
 

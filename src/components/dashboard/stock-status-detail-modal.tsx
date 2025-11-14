@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getMaterials } from '@/lib/supabase/insights';
-import { Database, Package, AlertTriangle, CheckCircle, XCircle, Minus, ChevronsUpDown, Check } from 'lucide-react';
+import { Database, ChevronsUpDown, Check } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { cn } from '@/lib/cn';
 import { useTranslation } from '@/store/useLanguageStore';
@@ -48,7 +48,6 @@ export function StockStatusDetailModal({
   open,
   onOpenChange,
   stockStatus,
-  loading
 }: StockStatusDetailModalProps) {
   const [materials, setMaterials] = useState<MaterialStockInfo[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
@@ -79,7 +78,7 @@ export function StockStatusDetailModal({
 
       // Mock stock data for each material (실제로는 API에서 가져와야 함)
       // TODO: 실제 stock data API 구현
-      const materialsWithStock: MaterialStockInfo[] = allMaterials.map((material, index) => ({
+      const materialsWithStock: MaterialStockInfo[] = allMaterials.map((material) => ({
         code: material.code,
         name: material.name,
         majorCategory: material.majorCategory,
@@ -141,20 +140,6 @@ export function StockStatusDetailModal({
       color: '#3B82F6' // blue
     }
   ] : [];
-
-  const getStatusIcon = (value: number) => {
-    if (value === 0) return <Minus className="h-4 w-4 text-gray-400" />;
-    if (value < 50) return <CheckCircle className="h-4 w-4 text-green-500" />;
-    if (value < 200) return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-    return <XCircle className="h-4 w-4 text-red-500" />;
-  };
-
-  const getStatusColor = (value: number) => {
-    if (value === 0) return 'text-gray-400';
-    if (value < 50) return 'text-green-600';
-    if (value < 200) return 'text-yellow-600';
-    return 'text-red-600';
-  };
 
   // Group materials by major category
   const materialsByCategory = materials.reduce((acc, material) => {

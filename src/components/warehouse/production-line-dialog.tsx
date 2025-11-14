@@ -43,9 +43,7 @@ export function ProductionLineDialog({
 
   // New material form
   const [newMaterialCode, setNewMaterialCode] = useState('');
-  const [newMaterialName, setNewMaterialName] = useState('');
   const [newMaterialQuantity, setNewMaterialQuantity] = useState('1');
-  const [newMaterialUnit, setNewMaterialUnit] = useState('EA');
 
   // Load available materials when dialog opens
   useEffect(() => {
@@ -102,16 +100,6 @@ export function ProductionLineDialog({
   // Handle material code selection
   const handleMaterialCodeChange = (selectedCode: string) => {
     setNewMaterialCode(selectedCode);
-
-    // Find the selected material and auto-fill name and unit
-    const selectedMaterial = availableMaterials.find(m => m.code === selectedCode);
-    if (selectedMaterial) {
-      setNewMaterialName(selectedMaterial.name);
-      setNewMaterialUnit(selectedMaterial.unit);
-    } else {
-      setNewMaterialName('');
-      setNewMaterialUnit('EA');
-    }
     setComboboxOpen(false);
     setSearchQuery('');
   };
@@ -147,9 +135,7 @@ export function ProductionLineDialog({
 
     // Reset form
     setNewMaterialCode('');
-    setNewMaterialName('');
     setNewMaterialQuantity('1');
-    setNewMaterialUnit('EA');
   };
 
   const handleRemoveMaterial = (id: string) => {

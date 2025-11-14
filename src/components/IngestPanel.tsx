@@ -14,16 +14,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
 import {
   Database,
   RefreshCw,
   AlertCircle,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Package,
   FileSpreadsheet,
   Loader2,
   AlertTriangle,
@@ -86,8 +80,8 @@ export function IngestPanel() {
 
   const selectedWarehouseData = warehouses.find(w => w.code === selectedWarehouse);
   const currentBinding = selectedWarehouse ? getBinding(selectedWarehouse) : undefined;
-  const hasWmsSources = currentBinding?.wms_source_ids?.length > 0;
-  const hasSapSources = currentBinding?.sap_source_ids?.length > 0;
+  const hasWmsSources = (currentBinding?.wms_source_ids?.length ?? 0) > 0;
+  const hasSapSources = (currentBinding?.sap_source_ids?.length ?? 0) > 0;
   const canIngest = selectedWarehouse && (
     (includeWms && hasWmsSources) || 
     (includeSap && hasSapSources)
@@ -154,13 +148,13 @@ export function IngestPanel() {
                 <div>
                   <span className="text-muted-foreground">WMS: </span>
                   <Badge variant={hasWmsSources ? "default" : "secondary"}>
-                    {currentBinding.wms_source_ids.length} sources
+                    {currentBinding?.wms_source_ids?.length ?? 0} sources
                   </Badge>
                 </div>
                 <div>
                   <span className="text-muted-foreground">SAP: </span>
                   <Badge variant={hasSapSources ? "default" : "secondary"}>
-                    {currentBinding.sap_source_ids.length} sources
+                    {currentBinding?.sap_source_ids?.length ?? 0} sources
                   </Badge>
                 </div>
               </div>

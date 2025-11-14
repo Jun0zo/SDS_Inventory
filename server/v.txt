@@ -1,0 +1,29 @@
+{"type": "service_account","project_id": "samsung-sds-471203","private_key_id": "8b12948ced4c6d0cab6b956da891dbc91bfe55d9","private_key": "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCj514L2t3BV+Zk
+XTHrKfktRSvdVC71NNVN9SsjcvB/5LYBcLvP5kU9+MnsTaF4vkfIQcsqnwH3Fmxj
+W1ap/5u7Kc7l99Aao6jOhdRQTttTezIWY/17MebjJrlDe1cSKTC3bLIL+T1m8VVX
+206IdcsX3VbWp7QicX6RpozbbhyWEulqNIvM6tZDM5hT/S/vWyyoWO8w5P6n008J
+VDfbbKuWX4eicttwRyS8GEiSKx7451LY12bOwYpkfZagOkipm4u2+lVUVWe58UPk
+SF91Z/e+pu31GDuhXH0A7++Q3qlGad6MNRpgWBST2KQ+EVDYnjNdS4gIRoWQxRdX
+QxOy7J/BAgMBAAECggEACahnhBHwBw1wlMWBzHBFR63LsFOOfon/32OI2KJ0Qcn6
+kEZJ982zEuww7ELVBtwJ92aqk7rpuws0BOz/892NGevETmxSM66k8tHjlT2XSoGP
+7Y4z5I1nxCbfC+cVtesNzQIbce2MWN9zsp0IYS21M1VaUYTRXkXzIf6XDlM8PZq8
+o4ND/Dfg+FD4TiuVF/7pez66XrhGpdEqmiktw+ojRXB7BTDw5G3vR06X8B5zxElD
+fMVWy3k31SaE5yIR6J3+tV5p/P08adz2Ci7CWFuyUixUYRlwYLccY2DaUNvkYROW
+wXabhjTI5urVazbCkvYTWG7s/nMzR1jNKRZNmV1NEQKBgQDVbxW8GMU5572zqYJM
+COpT8oH5ohboGBRzu4iKO1pVdlXxzfR2BlF6iQLT9B7J6H7xWrxfn8AeyoqLKw7W
+yHBNHlMQBmFBkGoMnkXYGlOvjNqgVNV13rKZ2v56jaW8b6xUIMVEZKp9YwxoSykx
+xI6Wc9N2PFsaIDFJpYlA6tkpcQKBgQDEl4KZEDk0SDTjxi1LUba3R8KKtvj87eJz
+4gGpXju3IFb78i/b8M0gMjjii3w+zqbvLoZiT4RTxhwgN8GAvdIhWYfpWeNVd7Uf
+F5Xh1THxt3Q44ZmJxKL2EBzoNdoKfohJNrCRI3ZDNKTI2ZNLNc92j7MZbJySEpUB
+KkbQjcUzUQKBgQC7aAvUmodq/dHzVG7FZrqitXhtAmdMqgAjUtJkVhNOoVZ7uJTj
+oU6f4ngqNdtm/I+iS0LGUBY4sy2NX2RrMZpyDKNwmbmCAVUs+ThotU0wAuThDTxV
+gBKgx8rVP1T8ra3KPPAZyq5s5LC7Tuu/+FAfSVqvIfX4bbX5bbGj39KI8QKBgAur
+OpM/RUX3KzyB3NplpUTHu6JkLe9FZ3Wdap/U+hJqlv8pZvHVHzfUA1BfGybXOU1l
+I5DeS2p1jeHTrWao3bohCFIvhbDjBBsuWTUoZGiGjR17NpPY2htk5XJbD/Ajho9h
+8aULx89BZq6NS5LhRMkyylyt97Ur6TBChCWI5LWhAoGAC91aFAHQ/rZYMlZ1+w44
+v/CGj+GfyZDq1GtIFnKk52VNTRadug2C8Chilfsly+iuTrNTQECcVrl/hudCvBn7
+1Ni9Jo48CfLntFUeX75ynkU3p3HJhULze12OSKsiwLoQDl4nd1lJgb+R7GpUdmhT
+lru9WKiyLz9sAXqn47lBgsE=
+-----END PRIVATE KEY-----
+","client_email": "sds-625@samsung-sds-471203.iam.gserviceaccount.com","client_id": "101432693982068588578","auth_uri": "https://accounts.google.com/o/oauth2/auth","token_uri": "https://oauth2.googleapis.com/token","auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/sds-625%40samsung-sds-471203.iam.gserviceaccount.com","universe_domain": "googleapis.com"}

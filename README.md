@@ -343,12 +343,62 @@ Implement these methods in `src/store/useLayoutStore.ts` for your specific WMS.
 
 ## Deployment
 
-### Vercel
+### Google Cloud Run (Backend API)
 
+The FastAPI backend can be deployed to Google Cloud Run for scalable, containerized hosting.
+
+**Deployment Options:**
+
+🤖 **Auto-deploy (GitHub Actions)** - Recommended
+```bash
+git push origin main  # Automatically deploys to Cloud Run
+```
+Setup guide: [GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md)
+
+🔧 **Manual deploy (Local script)**
+```bash
+# Set environment variables
+export PROJECT_ID=your-gcp-project-id
+export SUPABASE_URL=your-supabase-url
+export SUPABASE_SERVICE_KEY=your-service-key
+export GOOGLE_SHEETS_CREDENTIALS_JSON='{"type":"service_account",...}'
+export FRONTEND_URL=https://your-frontend.vercel.app
+
+# Deploy using the provided script
+./deploy-cloud-run.sh
+```
+
+**What you get:**
+- Containerized FastAPI backend running on uvicorn
+- Auto-scaling with zero-cost when idle
+- HTTPS endpoint with custom domain support
+- Environment-based configuration (PORT, CORS, etc.)
+
+**Detailed Guides:**
+- Manual deployment: [CLOUD_RUN_DEPLOYMENT.md](CLOUD_RUN_DEPLOYMENT.md)
+- Auto deployment: [GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md)
+
+**Important Notes:**
+- ⚠️ Files in `server/data/` are temporary and will be deleted on container restart
+- For production, migrate to Google Cloud Storage or Supabase Storage
+- Frontend should remain on Vercel (or similar) for optimal static asset delivery
+
+### Vercel (Frontend + Backend)
+
+**Frontend Only (Recommended):**
 1. Push your code to GitHub
 2. Import project in Vercel
-3. Add environment variables in Vercel project settings
+3. Add environment variables:
+   ```
+   VITE_SUPABASE_URL=your-supabase-url
+   VITE_SUPABASE_ANON_KEY=your-anon-key
+   VITE_API_URL=https://your-cloud-run-api.a.run.app
+   ```
 4. Deploy
+
+**Full Stack (Alternative):**
+1. Same as above, but Vercel will also deploy the Python backend as serverless functions
+2. Note: Vercel's serverless model differs from Cloud Run's container model
 
 ### Netlify
 
@@ -356,7 +406,7 @@ Implement these methods in `src/store/useLayoutStore.ts` for your specific WMS.
 2. Deploy the `dist` folder to Netlify
 3. Add environment variables in Netlify site settings
 
-### Docker
+### Docker (Local/Self-Hosted)
 
 ```dockerfile
 FROM node:18-alpine

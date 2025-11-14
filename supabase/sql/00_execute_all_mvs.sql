@@ -98,6 +98,101 @@ COMMENT ON FUNCTION normalize_zone_code IS
 -- Create index on zones for normalized code lookups
 CREATE INDEX IF NOT EXISTS idx_zones_code_normalized
   ON public.zones(normalize_zone_code(code));
+
+-- ============================================================================
+-- Rack Cell Capacity Helper Functions
+-- ============================================================================
+
+-- Helper function: Parse rack cell location into floor and column indices
+-- Format: "A35-01-02" -> rack="A35", floor=1, col=2 (1-based from WMS)
+CREATE OR REPLACE FUNCTION parse_rack_cell_location(
+  cell_no TEXT,
+  OUT rack_code TEXT,
+  OUT floor_idx INTEGER,
+  OUT col_idx INTEGER
+)
+RETURNS RECORD AS $$
+DECLARE
+  parts TEXT[];
+BEGIN
+  -- Split by hyphen: "A35-01-02" -> ["A35", "01", "02"]
+  parts := string_to_array(UPPER(TRIM(cell_no)), '-');
+
+  -- Validate format
+  IF array_length(parts, 1) != 3 THEN
+    rack_code := NULL;
+    floor_idx := NULL;
+    col_idx := NULL;
+    RETURN;
+  END IF;
+
+  rack_code := parts[1];
+
+  -- Parse integers, return 1-based indices (WMS format)
+  BEGIN
+    floor_idx := parts[2]::INTEGER;
+    col_idx := parts[3]::INTEGER;
+  EXCEPTION WHEN OTHERS THEN
+    floor_idx := NULL;
+    col_idx := NULL;
+  END;
+
+  RETURN;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+COMMENT ON FUNCTION parse_rack_cell_location IS
+  'Parses rack cell location string (e.g., "A35-01-02") into rack code, floor index, and column index (1-based)';
+
+-- Helper function: Get cell capacity from JSONB array
+-- cellCapacity structure: [floor][col] (0-based indexing)
+-- Returns capacity value (0-4), defaulting to 1 if not found
+CREATE OR REPLACE FUNCTION get_cell_capacity_from_jsonb(
+  cell_capacity_json JSONB,
+  floor_idx INTEGER,  -- 1-based from WMS
+  col_idx INTEGER     -- 1-based from WMS
+)
+RETURNS INTEGER AS $$
+DECLARE
+  capacity INTEGER;
+  floor_array JSONB;
+BEGIN
+  -- Return default if input is null
+  IF cell_capacity_json IS NULL THEN
+    RETURN 1;
+  END IF;
+
+  -- Convert 1-based indices to 0-based for array access
+  -- WMS: floor 1 = array index 0
+  floor_idx := floor_idx - 1;
+  col_idx := col_idx - 1;
+
+  -- Validate indices
+  IF floor_idx < 0 OR col_idx < 0 THEN
+    RETURN 1;
+  END IF;
+
+  -- Extract floor array: cellCapacity[floor]
+  floor_array := cell_capacity_json->floor_idx;
+  IF floor_array IS NULL THEN
+    RETURN 1;
+  END IF;
+
+  -- Extract capacity value: cellCapacity[floor][col]
+  capacity := (floor_array->col_idx)::INTEGER;
+
+  -- Return capacity or default to 1
+  RETURN COALESCE(capacity, 1);
+
+EXCEPTION WHEN OTHERS THEN
+  -- On any error, default to 1
+  RETURN 1;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+COMMENT ON FUNCTION get_cell_capacity_from_jsonb IS
+  'Extracts cell capacity from JSONB array cellCapacity[floor][col] using 1-based WMS indices. Returns 1 if not found.';
+
 -- Zone Capacities Materialized View
 -- Purpose: Pre-calculate zone capacities and current stock for fast dashboard queries
 -- Performance: Reduces query time from 500-2000ms to 10-50ms
@@ -107,7 +202,7 @@ DROP MATERIALIZED VIEW IF EXISTS public.zone_capacities_mv CASCADE;
 
 -- Create materialized view for zone capacities
 CREATE MATERIALIZED VIEW public.zone_capacities_mv AS
-WITH zone_layout_capacity AS (
+WITH zone_capacity AS (
   -- Aggregate max capacity directly from items.max_capacity for each zone
   SELECT
     z.id AS zone_id,
@@ -115,7 +210,6 @@ WITH zone_layout_capacity AS (
     z.name AS zone_name,
     z.warehouse_id,
     z.warehouse_code,
-    COUNT(DISTINCT l.id) AS layout_count,
     COUNT(DISTINCT i.id) AS item_count,
     -- Calculate zone max capacity from items.max_capacity
     -- max_capacity is automatically calculated by trigger on items table:
@@ -125,31 +219,30 @@ WITH zone_layout_capacity AS (
     -- Collect all locations for this zone (for WMS matching)
     array_agg(DISTINCT i.location) FILTER (WHERE i.location IS NOT NULL) AS zone_locations
   FROM public.zones z
-  LEFT JOIN public.layouts l ON l.zone_id = z.id
-  LEFT JOIN public.items i ON i.layout_id = l.id
+  LEFT JOIN public.items i ON i.zone_id = z.id
   GROUP BY z.id, z.code, z.name, z.warehouse_id, z.warehouse_code
 ),
 wms_current_stock AS (
   -- Calculate current stock from WMS data by matching BOTH zone AND location
   -- This matches the original logic: zone must match AND location must match (flat or rack pattern)
   SELECT
-    zlc.zone_id,
+    zc.zone_id,
     COUNT(DISTINCT w.id) AS current_stock_count,
     SUM(COALESCE(w.available_qty, 0))::NUMERIC AS total_available_qty
-  FROM zone_layout_capacity zlc
+  FROM zone_capacity zc
   JOIN public.wms_raw_rows w ON
     -- Condition 1: Zone must match (direct comparison)
     EXISTS (
       SELECT 1
       FROM public.zones z
       WHERE normalize_zone_code(w.zone) = normalize_zone_code(w.split_key)
-        AND z.id = zlc.zone_id
+        AND z.id = zc.zone_id
     )
     AND
     -- Condition 2: Location must match (flat: exact match, rack: prefix match)
     EXISTS (
       SELECT 1
-      FROM unnest(zlc.zone_locations) AS item_location
+      FROM unnest(zc.zone_locations) AS item_location
       WHERE
         -- Flat: exact match (e.g., WMS "B1" = item "B1")
         UPPER(TRIM(w.location)) = UPPER(TRIM(item_location))
@@ -159,40 +252,39 @@ wms_current_stock AS (
     )
   WHERE w.zone IS NOT NULL
     AND w.location IS NOT NULL
-  GROUP BY zlc.zone_id
+  GROUP BY zc.zone_id
 )
 SELECT
-  zlc.zone_id,
-  zlc.zone_code,
-  zlc.zone_name,
-  zlc.warehouse_id,
-  zlc.warehouse_code,
-  zlc.layout_count,
-  zlc.item_count,
-  zlc.max_capacity,
+  zc.zone_id,
+  zc.zone_code,
+  zc.zone_name,
+  zc.warehouse_id,
+  zc.warehouse_code,
+  zc.item_count,
+  zc.max_capacity,
   -- Current stock from zone AND location matched WMS rows
   COALESCE(wcs.current_stock_count, 0)::INTEGER AS current_stock,
   COALESCE(wcs.total_available_qty, 0)::NUMERIC AS total_available_qty,
   -- Calculate utilization percentage
   CASE
-    WHEN zlc.max_capacity > 0 THEN
+    WHEN zc.max_capacity > 0 THEN
       ROUND(
-        (COALESCE(wcs.current_stock_count, 0)::NUMERIC / zlc.max_capacity::NUMERIC * 100),
+        (COALESCE(wcs.current_stock_count, 0)::NUMERIC / zc.max_capacity::NUMERIC * 100),
         2
       )
     ELSE 0
   END AS utilization_percentage,
   -- Capacity status categorization
   CASE
-    WHEN zlc.max_capacity = 0 THEN 'no_capacity'
-    WHEN COALESCE(wcs.current_stock_count, 0)::NUMERIC / zlc.max_capacity::NUMERIC >= 0.9 THEN 'critical'
-    WHEN COALESCE(wcs.current_stock_count, 0)::NUMERIC / zlc.max_capacity::NUMERIC >= 0.7 THEN 'high'
-    WHEN COALESCE(wcs.current_stock_count, 0)::NUMERIC / zlc.max_capacity::NUMERIC >= 0.5 THEN 'medium'
+    WHEN zc.max_capacity = 0 THEN 'no_capacity'
+    WHEN COALESCE(wcs.current_stock_count, 0)::NUMERIC / zc.max_capacity::NUMERIC >= 0.9 THEN 'critical'
+    WHEN COALESCE(wcs.current_stock_count, 0)::NUMERIC / zc.max_capacity::NUMERIC >= 0.7 THEN 'high'
+    WHEN COALESCE(wcs.current_stock_count, 0)::NUMERIC / zc.max_capacity::NUMERIC >= 0.5 THEN 'medium'
     ELSE 'low'
   END AS capacity_status,
   NOW() AS last_updated
-FROM zone_layout_capacity zlc
-LEFT JOIN wms_current_stock wcs ON wcs.zone_id = zlc.zone_id;
+FROM zone_capacity zc
+LEFT JOIN wms_current_stock wcs ON wcs.zone_id = zc.zone_id;
 
 -- Create indexes on materialized view
 CREATE UNIQUE INDEX idx_zone_capacities_mv_zone_id
@@ -546,16 +638,60 @@ COMMENT ON MATERIALIZED VIEW public.sap_inventory_indexed_mv IS
   'Indexed SAP inventory data for fast server-side filtering in Inventory View page.
    Includes normalized columns for case-insensitive search.
    Refresh this view after SAP data sync.';
--- Location Inventory Summary Materialized View
--- Purpose: Pre-aggregate inventory by location for Zone Layout Editor SidePanel
--- Performance: Eliminates API calls for each location selection, pre-aggregates lot distribution
+-- Location Inventory Summary Materialized View (Item-Level)
+-- Purpose: Pre-aggregate inventory by ITEM (not WMS location) for Zone Layout Editor SidePanel and Dashboard heatmap
+-- Performance: Shows data at item granularity, matching inventory_view display level
+-- Granularity: One row per item in items table (like item_inventory_summary_mv)
+-- Key difference from item_inventory_summary_mv: Adds capacity-aware counting with rack cell capacities
 
 -- Drop existing view if exists
 DROP MATERIALIZED VIEW IF EXISTS public.location_inventory_summary_mv CASCADE;
 
 -- Create materialized view for item-level location inventory summaries
 CREATE MATERIALIZED VIEW public.location_inventory_summary_mv AS
-WITH item_lot_distribution AS (
+WITH rack_capacity_aware_count AS (
+  -- Calculate capacity-aware stock count for rack items
+  -- Logic: If cell capacity = 1, count as 1; if capacity >= 2, count all rows
+  SELECT
+    i.id AS item_id,
+    w.cell_no,
+    COUNT(*) AS row_count,
+    -- Get capacity for this cell location
+    CASE
+      WHEN i.type = 'rack' THEN
+        get_cell_capacity_from_jsonb(
+          i.cell_capacity,
+          (parse_rack_cell_location(w.cell_no)).floor_idx,
+          (parse_rack_cell_location(w.cell_no)).col_idx
+        )
+      ELSE NULL
+    END AS cell_capacity,
+    -- Apply capacity-aware counting logic
+    CASE
+      WHEN i.type = 'rack' THEN
+        CASE
+          WHEN get_cell_capacity_from_jsonb(
+            i.cell_capacity,
+            (parse_rack_cell_location(w.cell_no)).floor_idx,
+            (parse_rack_cell_location(w.cell_no)).col_idx
+          ) = 1 THEN 1  -- Capacity = 1: count as 1
+          ELSE COUNT(*)  -- Capacity >= 2: count all rows
+        END
+      ELSE COUNT(*)  -- Flat items: count all rows
+    END AS capacity_aware_count
+  FROM public.items i
+  JOIN public.warehouses wh ON i.warehouse_id = wh.id
+  JOIN public.wms_raw_rows w ON
+    normalize_zone_code(w.split_key) = normalize_zone_code(i.location)
+    AND (
+      (i.type = 'flat' AND UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i.location)))
+      OR
+      (i.type = 'rack' AND UPPER(TRIM(w.cell_no)) ~ ('^' || UPPER(TRIM(i.location)) || '-[0-9]+-[0-9]+$'))
+    )
+  WHERE wh.code IS NOT NULL
+  GROUP BY i.id, i.type, i.cell_capacity, w.cell_no
+),
+item_lot_distribution AS (
   -- Pre-aggregate lot distribution per item to avoid nested aggregation
   SELECT
     i.id AS item_id,
@@ -564,29 +700,19 @@ WITH item_lot_distribution AS (
       lot_agg.lot_count
     ) AS lot_dist_json
   FROM public.items i
-  JOIN public.layouts l ON i.layout_id = l.id
-  JOIN public.warehouses wh ON l.warehouse_id = wh.id
+  JOIN public.warehouses wh ON i.warehouse_id = wh.id
   LEFT JOIN (
     SELECT
-      wh2.code as warehouse_code,
+      wh2.code AS warehouse_code,
       i2.id AS item_id,
-      w.lot_key,
+      COALESCE(w.production_lot_no, w.lot_no) AS lot_key,
       COUNT(*) AS lot_count,
       SUM(w.available_qty)::NUMERIC AS lot_qty
     FROM public.items i2
-    JOIN public.layouts l2 ON i2.layout_id = l2.id
-    JOIN public.warehouses wh2 ON l2.warehouse_id = wh2.id
+    JOIN public.warehouses wh2 ON i2.warehouse_id = wh2.id
     JOIN public.wms_raw_rows w ON
-      w.warehouse_code = wh2.code
-      -- Match zone via warehouse_bindings.source_bindings lookup
-      AND EXISTS (
-        SELECT 1 FROM public.warehouse_bindings wb
-        WHERE wb.warehouse_id = wh2.id
-        AND wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'type' = 'wms'
-        AND normalize_zone_code(
-          (wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'split_value')
-        ) = normalize_zone_code(l2.zone_name)
-      )
+      -- Directly compare split_key with items.location
+      normalize_zone_code(w.split_key) = normalize_zone_code(i2.location)
       AND (
         -- Flat items: exact location match
         (i2.type = 'flat' AND UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i2.location)))
@@ -594,7 +720,7 @@ WITH item_lot_distribution AS (
         -- Rack items: pattern match (A35 matches A35-01-01)
         (i2.type = 'rack' AND UPPER(TRIM(w.cell_no)) ~ ('^' || UPPER(TRIM(i2.location)) || '-[0-9]+-[0-9]+$'))
       )
-    GROUP BY wh2.code, i2.id, w.lot_key
+    GROUP BY wh2.code, i2.id, COALESCE(w.production_lot_no, w.lot_no)
   ) lot_agg ON
     lot_agg.warehouse_code = wh.code
     AND lot_agg.item_id = i.id
@@ -613,28 +739,18 @@ item_material_aggregation AS (
       ORDER BY mat.item_total_qty DESC
     ) AS top_materials_json
   FROM public.items i
-  JOIN public.layouts l ON i.layout_id = l.id
-  JOIN public.warehouses wh ON l.warehouse_id = wh.id
+  JOIN public.warehouses wh ON i.warehouse_id = wh.id
   LEFT JOIN (
     SELECT
-      wh2.code as warehouse_code,
+      wh2.code AS warehouse_code,
       i2.id AS item_id,
       w.item_code,
       SUM(COALESCE(w.available_qty, 0))::NUMERIC AS item_total_qty
     FROM public.items i2
-    JOIN public.layouts l2 ON i2.layout_id = l2.id
-    JOIN public.warehouses wh2 ON l2.warehouse_id = wh2.id
+    JOIN public.warehouses wh2 ON i2.warehouse_id = wh2.id
     JOIN public.wms_raw_rows w ON
-      w.warehouse_code = wh2.code
-      -- Match zone via warehouse_bindings.source_bindings lookup
-      AND EXISTS (
-        SELECT 1 FROM public.warehouse_bindings wb
-        WHERE wb.warehouse_id = wh2.id
-        AND wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'type' = 'wms'
-        AND normalize_zone_code(
-          (wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'split_value')
-        ) = normalize_zone_code(l2.zone_name)
-      )
+      -- Directly compare split_key with items.location
+      normalize_zone_code(w.split_key) = normalize_zone_code(i2.location)
       AND (
         (i2.type = 'flat' AND UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i2.location)))
         OR
@@ -650,31 +766,39 @@ item_material_aggregation AS (
 )
 SELECT
   i.id AS item_id,
-  i.layout_id,
+  i.warehouse_id,
   wh.code as warehouse_code,
   i.zone AS item_zone,
   i.location AS item_location,  -- Items table location name (e.g., "A35", "B1")
   i.type,
   i.max_capacity,
-  -- Current stock count: COUNT based on item type
-  -- For rack: COUNT of unique WMS cell_no (locations)
-  -- For flat: COUNT of WMS rows (items can share locations)
-  CASE
-    WHEN i.type = 'rack' THEN COUNT(DISTINCT w.cell_no) FILTER (WHERE w.id IS NOT NULL)
-    ELSE COUNT(*) FILTER (WHERE w.id IS NOT NULL)
-  END AS current_stock_count,
-  -- Summary statistics
-  COUNT(*) FILTER (WHERE w.id IS NOT NULL) AS total_items,
+  -- Current stock count: capacity-aware counting
+  -- For rack with capacity = 1: count as 1 per location
+  -- For rack with capacity >= 2 or flat: count all rows
+  COALESCE(
+    (SELECT SUM(rcac.capacity_aware_count)
+     FROM rack_capacity_aware_count rcac
+     WHERE rcac.item_id = i.id),
+    0
+  )::INTEGER AS current_stock_count,
+  -- Summary statistics (total_items = same as current_stock_count for consistency)
+  COALESCE(
+    (SELECT SUM(rcac.capacity_aware_count)
+     FROM rack_capacity_aware_count rcac
+     WHERE rcac.item_id = i.id),
+    0
+  )::INTEGER AS total_items,
   SUM(COALESCE(w.available_qty, 0))::NUMERIC AS total_available_qty,
   SUM(COALESCE(w.tot_qty, 0))::NUMERIC AS total_qty,
   COUNT(DISTINCT w.item_code) FILTER (WHERE w.item_code IS NOT NULL) AS unique_item_codes,
-  COUNT(DISTINCT w.lot_key) FILTER (WHERE w.lot_key IS NOT NULL) AS unique_lots,
+  COUNT(DISTINCT COALESCE(w.production_lot_no, w.lot_no)) FILTER (WHERE COALESCE(w.production_lot_no, w.lot_no) IS NOT NULL) AS unique_lots,
   -- Items as JSON array (ALL items for SidePanel)
   jsonb_agg(
     jsonb_build_object(
       'id', w.id,
       'item_code', w.item_code,
-      'lot_key', w.lot_key,
+      'lot_key', COALESCE(w.production_lot_no, w.lot_no),
+      'production_lot_no', w.production_lot_no,
       'available_qty', w.available_qty,
       'total_qty', w.tot_qty,
       'inb_date', w.inb_date,
@@ -683,7 +807,7 @@ SELECT
       'item_name', w.item_nm,
       'cell_no', w.cell_no  -- WMS cell_no for reference
     )
-    ORDER BY w.available_qty DESC NULLS LAST, w.cell_no, w.item_code, w.lot_key
+    ORDER BY w.available_qty DESC NULLS LAST, w.cell_no, w.item_code, COALESCE(w.production_lot_no, w.lot_no)
   ) FILTER (WHERE w.id IS NOT NULL) AS items_json,
   -- Lot distribution (from pre-aggregated CTE)
   ld.lot_dist_json AS lot_distribution,
@@ -693,28 +817,21 @@ SELECT
   CASE
     WHEN i.max_capacity > 0 THEN
       ROUND((
-        CASE
-          WHEN i.type = 'rack' THEN COUNT(DISTINCT w.cell_no) FILTER (WHERE w.id IS NOT NULL)
-          ELSE COUNT(*) FILTER (WHERE w.id IS NOT NULL)
-        END::NUMERIC / i.max_capacity
+        COALESCE(
+          (SELECT SUM(rcac.capacity_aware_count)
+           FROM rack_capacity_aware_count rcac
+           WHERE rcac.item_id = i.id),
+          0
+        )::NUMERIC / i.max_capacity
       ) * 100, 2)
     ELSE 0
   END AS utilization_percentage,
   MAX(w.fetched_at) AS last_updated
 FROM public.items i
-JOIN public.layouts l ON i.layout_id = l.id
-JOIN public.warehouses wh ON l.warehouse_id = wh.id
+JOIN public.warehouses wh ON i.warehouse_id = wh.id
 LEFT JOIN public.wms_raw_rows w ON
-  w.warehouse_code = wh.code
-  -- Match zone via warehouse_bindings.source_bindings lookup
-  AND EXISTS (
-    SELECT 1 FROM public.warehouse_bindings wb
-    WHERE wb.warehouse_id = wh.id
-    AND wb.source_bindings ? (w.source_id::text || '::' || w.split_key)
-    AND normalize_zone_code(
-      (wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'split_value')
-    ) = normalize_zone_code(l.zone_name)
-  )
+  -- Directly compare split_key with items.location
+  normalize_zone_code(w.split_key) = normalize_zone_code(i.location)
   AND (
     -- Flat items: exact location match
     (i.type = 'flat' AND UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i.location)))
@@ -726,15 +843,15 @@ LEFT JOIN item_lot_distribution ld ON ld.item_id = i.id
 LEFT JOIN item_material_aggregation ma ON ma.item_id = i.id
 WHERE wh.code IS NOT NULL
 GROUP BY
-  i.id, i.layout_id, wh.code, i.zone, i.location, i.type, i.max_capacity,
+  i.id, i.warehouse_id, wh.code, i.zone, i.location, i.type, i.max_capacity,
   ld.lot_dist_json, ma.top_materials_json;
 
 -- Create indexes on materialized view
 CREATE UNIQUE INDEX idx_location_inventory_summary_mv_item_id
   ON public.location_inventory_summary_mv(item_id);
 
-CREATE INDEX idx_location_inventory_summary_mv_layout
-  ON public.location_inventory_summary_mv(layout_id);
+CREATE INDEX idx_location_inventory_summary_mv_warehouse_id
+  ON public.location_inventory_summary_mv(warehouse_id);
 
 CREATE INDEX idx_location_inventory_summary_mv_warehouse
   ON public.location_inventory_summary_mv(warehouse_code);
@@ -795,45 +912,37 @@ WITH item_lot_distribution AS (
       lot_agg.lot_qty
     ) AS lot_dist_json
   FROM public.items i
-  JOIN public.layouts l ON i.layout_id = l.id
+  JOIN public.warehouses wh ON i.warehouse_id = wh.id
   LEFT JOIN (
     SELECT
-      l2.warehouse_code,
+      wh2.code AS warehouse_code,
       i2.zone,
       i2.location,
       w.lot_key,
       SUM(w.available_qty)::NUMERIC AS lot_qty
     FROM public.items i2
-    JOIN public.layouts l2 ON i2.layout_id = l2.id
+    JOIN public.warehouses wh2 ON i2.warehouse_id = wh2.id
     JOIN public.wms_raw_rows w ON
-      w.warehouse_code = wh2.code
-      -- Match zone via warehouse_bindings.source_bindings lookup
-      AND EXISTS (
-        SELECT 1 FROM public.warehouse_bindings wb
-        WHERE wb.warehouse_id = wh2.id
-        AND wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'type' = 'wms'
-        AND normalize_zone_code(
-          (wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'split_value')
-        ) = normalize_zone_code(l2.zone_name)
-      )
+      -- Directly compare split_key with items.location
+      normalize_zone_code(w.split_key) = normalize_zone_code(i2.location)
       AND (
-        UPPER(TRIM(w.location)) = UPPER(TRIM(i2.location))
-        OR UPPER(TRIM(w.location)) LIKE UPPER(TRIM(i2.location)) || '-%'
+        UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i2.location))
+        OR UPPER(TRIM(w.cell_no)) LIKE UPPER(TRIM(i2.location)) || '-%'
       )
-    GROUP BY l2.warehouse_code, i2.zone, i2.location, w.lot_key
+    GROUP BY wh2.code, i2.zone, i2.location, w.lot_key
   ) lot_agg ON
-    lot_agg.warehouse_code = l.warehouse_code
+    lot_agg.warehouse_code = wh.code
     AND normalize_zone_code(lot_agg.zone) = normalize_zone_code(i.zone)
     AND lot_agg.location = i.location
-  WHERE l.warehouse_code IS NOT NULL
+  WHERE wh.code IS NOT NULL
   GROUP BY i.id
 )
 SELECT
   i.id AS item_id,
-  i.layout_id,
-  l.zone_id,
-  l.zone_name,
-  l.warehouse_code,
+  i.warehouse_id,
+  i.zone_id,
+  z.name AS zone_name,
+  wh.code AS warehouse_code,
   i.zone AS item_zone,
   i.location,
   i.type,
@@ -863,8 +972,8 @@ SELECT
       'valid_date', w.valid_date,
       'uld_id', w.uld_id,
       'item_nm', w.item_nm,
-      'location', w.location
-    ) ORDER BY w.available_qty DESC NULLS LAST, w.location, w.item_code
+      'location', w.cell_no
+    ) ORDER BY w.available_qty DESC NULLS LAST, w.cell_no, w.item_code
   ) FILTER (WHERE w.id IS NOT NULL) AS items_json,
   -- Lot distribution (from pre-aggregated CTE)
   ld.lot_dist_json AS lot_distribution,
@@ -876,26 +985,19 @@ SELECT
   END AS utilization_percentage,
   MAX(w.fetched_at) AS last_updated
 FROM public.items i
-JOIN public.layouts l ON i.layout_id = l.id
+JOIN public.warehouses wh ON i.warehouse_id = wh.id
+LEFT JOIN public.zones z ON i.zone_id = z.id
 LEFT JOIN public.wms_raw_rows w ON
-  w.warehouse_code = wh.code
-  -- Match zone via warehouse_bindings.source_bindings lookup
-  AND EXISTS (
-    SELECT 1 FROM public.warehouse_bindings wb
-    WHERE wb.warehouse_id = wh.id
-    AND wb.source_bindings ? (w.source_id::text || '::' || w.split_key)
-    AND normalize_zone_code(
-      (wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'split_value')
-    ) = normalize_zone_code(l.zone_name)
-  )
+  -- Directly compare split_key with items.location
+  normalize_zone_code(w.split_key) = normalize_zone_code(i.location)
   AND (
-    UPPER(TRIM(w.location)) = UPPER(TRIM(i.location))
-    OR UPPER(TRIM(w.location)) LIKE UPPER(TRIM(i.location)) || '-%'
+    UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i.location))
+    OR UPPER(TRIM(w.cell_no)) LIKE UPPER(TRIM(i.location)) || '-%'
   )
 LEFT JOIN item_lot_distribution ld ON ld.item_id = i.id
-WHERE l.warehouse_code IS NOT NULL
+WHERE wh.code IS NOT NULL
 GROUP BY
-  i.id, i.layout_id, l.zone_id, l.zone_name, l.warehouse_code,
+  i.id, i.warehouse_id, i.zone_id, z.name, wh.code,
   i.zone, i.location, i.type, i.max_capacity,
   i.x, i.y, i.w, i.h, i.rotation, i.floors, i.rows, i.cols,
   ld.lot_dist_json;
@@ -904,8 +1006,8 @@ GROUP BY
 CREATE UNIQUE INDEX idx_item_inventory_summary_mv_item_id
   ON public.item_inventory_summary_mv(item_id);
 
-CREATE INDEX idx_item_inventory_summary_mv_layout
-  ON public.item_inventory_summary_mv(layout_id);
+CREATE INDEX idx_item_inventory_summary_mv_warehouse
+  ON public.item_inventory_summary_mv(warehouse_id);
 
 CREATE INDEX idx_item_inventory_summary_mv_zone
   ON public.item_inventory_summary_mv(zone_id);

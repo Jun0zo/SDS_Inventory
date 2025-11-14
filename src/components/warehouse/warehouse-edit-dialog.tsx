@@ -5,7 +5,7 @@ import { useSheetSourcesStore } from '@/store/useSheetSourcesStore';
 import { useWarehouseBindingStore } from '@/store/useWarehouseBindingStore';
 import { useTranslation } from '@/store/useLanguageStore';
 import { isWarehouseCodeUnique } from '@/lib/supabase/warehouses';
-import { getSplitValuesForSource, type SourceBinding, type SplitValuesResponse } from '@/lib/etl-extended';
+import { getSplitValuesForSource, type SourceBinding } from '@/lib/etl-extended';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,6 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -28,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Database, FileSpreadsheet, AlertCircle } from 'lucide-react';
+import { Loader2, Database, FileSpreadsheet } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface WarehouseEditDialogProps {

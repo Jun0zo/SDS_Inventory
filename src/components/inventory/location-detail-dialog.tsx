@@ -90,7 +90,7 @@ export function LocationDetailDialog({
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Space Utilization</span>
-                    <span className="font-medium">{currentQty.toFixed(0)} / {capacity}</span>
+                    <span className="font-medium">{currentCount} / {capacity}</span>
                   </div>
                   <div className="h-3 bg-muted rounded-full overflow-hidden">
                     <div
