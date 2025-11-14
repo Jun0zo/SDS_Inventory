@@ -162,6 +162,17 @@ export function DashboardPage() {
   const [stockDaysByLine, setStockDaysByLine] = useState<Map<string, any>>(new Map());
 
   useEffect(() => {
+    // Log environment variables to console for debugging
+    console.log('🔧 Environment Variables:', {
+      VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+      VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+      MODE: import.meta.env.MODE,
+      DEV: import.meta.env.DEV,
+      PROD: import.meta.env.PROD,
+      BASE_URL: import.meta.env.BASE_URL,
+    });
+
     const abortController = new AbortController();
     loadData(abortController.signal);
 
