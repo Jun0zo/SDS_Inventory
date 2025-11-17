@@ -47,13 +47,6 @@ interface Material {
   updated_at: string;
 }
 
-interface MaterialsResponse {
-  data: Material[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
 interface MajorCategory {
   id: string;
   name: string;
