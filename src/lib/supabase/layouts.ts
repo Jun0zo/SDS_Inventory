@@ -496,7 +496,7 @@ export async function renameZone(
     return { success: false, error: itemsError.message };
   }
 
-  // Clear dashboard cache after zone rename
+  // Clear dashboard cache and update zone capacities cache after zone rename
   try {
     const { data: warehouse } = await supabase
       .from('warehouses')
@@ -506,20 +506,42 @@ export async function renameZone(
 
     if (warehouse) {
       const BASE_URL = import.meta.env.VITE_ETL_BASE_URL || 'http://localhost:8787';
-      const response = await fetch(
-        `${BASE_URL}/api/dashboard/cache/clear?pattern=${encodeURIComponent(warehouse.code)}`,
-        { method: 'POST' }
-      );
 
-      if (!response.ok) {
-        console.warn('Failed to clear dashboard cache after zone rename');
-      } else {
-        console.log('Dashboard cache cleared after zone rename');
+      // Update zone capacities cache
+      try {
+        const capacityResponse = await fetch(
+          `${BASE_URL}/api/zones/capacities/update?warehouse_codes=${encodeURIComponent(warehouse.code)}`,
+          { method: 'POST' }
+        );
+
+        if (!capacityResponse.ok) {
+          console.warn('Failed to update zone capacities cache after zone rename');
+        } else {
+          console.log('Zone capacities cache updated after zone rename');
+        }
+      } catch (capacityError) {
+        console.warn('Could not update zone capacities cache after zone rename:', capacityError);
+      }
+
+      // Clear dashboard cache
+      try {
+        const cacheResponse = await fetch(
+          `${BASE_URL}/api/dashboard/cache/clear?pattern=${encodeURIComponent(warehouse.code)}`,
+          { method: 'POST' }
+        );
+
+        if (!cacheResponse.ok) {
+          console.warn('Failed to clear dashboard cache after zone rename');
+        } else {
+          console.log('Dashboard cache cleared after zone rename');
+        }
+      } catch (cacheError) {
+        console.warn('Could not clear dashboard cache after zone rename:', cacheError);
       }
     }
   } catch (error) {
-    console.warn('Could not clear dashboard cache:', error);
-    // Don't fail the rename operation if cache clearing fails
+    console.warn('Could not update caches after zone rename:', error);
+    // Don't fail the rename operation if cache operations fail
   }
 
   return { success: true };

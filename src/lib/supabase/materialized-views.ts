@@ -98,11 +98,23 @@ export async function refreshAllMaterializedViews(): Promise<{
 /**
  * Refresh location-related materialized views after layout changes
  * This is optimized for layout updates and only refreshes necessary views
+ *
+ * IMPORTANT: zone_capacities_mv depends on location_inventory_summary_mv,
+ * so we must refresh location_inventory_summary_mv first, then zone_capacities_mv sequentially
  */
 export async function refreshLayoutMaterializedViews(): Promise<MVRefreshResult[]> {
-  return refreshMultipleMaterializedViews([
+  const results: MVRefreshResult[] = [];
+
+  // Step 1: Refresh location_inventory_summary_mv and item_inventory_summary_mv in parallel
+  const parallelResults = await refreshMultipleMaterializedViews([
     'location_inventory_summary_mv',
     'item_inventory_summary_mv',
-    'zone_capacities_mv',
   ]);
+  results.push(...parallelResults);
+
+  // Step 2: Refresh zone_capacities_mv (depends on location_inventory_summary_mv)
+  const zoneResult = await refreshMaterializedView('zone_capacities_mv');
+  results.push(zoneResult);
+
+  return results;
 }
