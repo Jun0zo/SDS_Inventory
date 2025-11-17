@@ -569,10 +569,11 @@ export function DashboardPage() {
                     /* List View */
                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
                       {userDefinedZones.slice(0, 15).map((zone, idx) => {
-                        const utilization = zone.utilization_percentage || 0;
                         const currentQty = zone.current_quantity || 0;
                         const maxCapacity = zone.total_capacity || 0;
                         const itemCount = zone.item_count || 0;
+                        // Calculate utilization percentage from actual values
+                        const utilization = maxCapacity > 0 ? (currentQty / maxCapacity) * 100 : 0;
 
                         // Color based on utilization percentage
                         let bgColor = 'bg-gray-200';
@@ -627,9 +628,11 @@ export function DashboardPage() {
                       <ResponsiveContainer width="100%" height={320}>
                         <Treemap
                           data={userDefinedZones.map((zone) => {
-                            const utilization = zone.utilization_percentage || 0;
+                            const currentQty = zone.current_quantity || 0;
                             const maxCapacity = zone.total_capacity || 0;
                             const itemCount = zone.item_count || 0;
+                            // Calculate utilization percentage from actual values
+                            const utilization = maxCapacity > 0 ? (currentQty / maxCapacity) * 100 : 0;
 
                             // Color based on utilization percentage
                             let fill = '#e5e7eb'; // gray-200

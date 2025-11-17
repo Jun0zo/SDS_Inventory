@@ -490,8 +490,8 @@ export async function getExpiringItems(warehouseIds: string[], daysAhead = 30): 
       .from('expiring_items_mv')
       .select('*')
       .in('factory_location', splitValues)
-      .lte('days_remaining', daysAhead)  // Filter by days_ahead parameter
-      .order('valid_date', { ascending: true })
+      .not('urgency', 'eq', 'no_expiry')  // Exclude no_expiry items only
+      .order('days_remaining', { ascending: true })  // Sort by urgency (MV already sorted)
       .limit(20);
 
     if (error) throw error;

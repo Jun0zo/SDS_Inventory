@@ -2,6 +2,48 @@
 -- Master Migration: Execute All Materialized Views
 -- ============================================================================
 
+-- ============================================
+-- FIX: Add missing columns to materials table
+-- ============================================
+
+-- Add updated_at column to materials table
+ALTER TABLE public.materials
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Add foreign key columns to materials table
+ALTER TABLE public.materials
+ADD COLUMN IF NOT EXISTS major_category_id UUID REFERENCES public.major_categories(id) ON DELETE SET NULL;
+
+ALTER TABLE public.materials
+ADD COLUMN IF NOT EXISTS minor_category_id UUID REFERENCES public.minor_categories(id) ON DELETE SET NULL;
+
+-- Populate major_category_id by matching existing text values
+UPDATE public.materials m
+SET major_category_id = mc.id
+FROM public.major_categories mc
+WHERE m.major_category IS NOT NULL
+  AND m.major_category <> ''
+  AND mc.name = m.major_category;
+
+-- Populate minor_category_id by matching existing text values
+UPDATE public.materials m
+SET minor_category_id = minc.id
+FROM public.minor_categories minc
+INNER JOIN public.major_categories majc ON majc.id = minc.major_category_id
+WHERE m.minor_category IS NOT NULL
+  AND m.minor_category <> ''
+  AND m.major_category = majc.name
+  AND m.minor_category = minc.name;
+
+-- Create indexes for the new FK columns
+CREATE INDEX IF NOT EXISTS idx_materials_major_category_id ON public.materials(major_category_id);
+CREATE INDEX IF NOT EXISTS idx_materials_minor_category_id ON public.materials(minor_category_id);
+CREATE INDEX IF NOT EXISTS idx_materials_updated_at ON public.materials(updated_at DESC);
+
+-- ============================================
+-- Helper Functions
+-- ============================================
+
 -- Helper function to sum integer arrays
 CREATE OR REPLACE FUNCTION array_sum_int(arr INTEGER[])
 RETURNS INTEGER AS $$
@@ -135,98 +177,63 @@ CREATE INDEX IF NOT EXISTS idx_zones_code_normalized
 -- Zone Capacities Materialized View
 -- Purpose: Pre-calculate zone capacities and current stock for fast dashboard queries
 -- Performance: Reduces query time from 500-2000ms to 10-50ms
+-- Note: Now based on location_inventory_summary_mv for accurate stock counts
 
 -- Drop existing view if exists
 DROP MATERIALIZED VIEW IF EXISTS public.zone_capacities_mv CASCADE;
 
--- Create materialized view for zone capacities
+-- Create materialized view for zone capacities using location_inventory_summary_mv as source
 CREATE MATERIALIZED VIEW public.zone_capacities_mv AS
-WITH zone_layout_capacity AS (
-  -- Aggregate max capacity directly from items.max_capacity for each zone
+WITH zone_aggregates AS (
+  -- Aggregate location_inventory_summary_mv data by zone
   SELECT
     z.id AS zone_id,
     z.code AS zone_code,
     z.name AS zone_name,
     z.warehouse_id,
-    wh.code AS warehouse_code, -- Get warehouse code from warehouses table
-    0 AS layout_count, -- layouts table doesn't exist, using 0
-    COUNT(DISTINCT i.id) AS item_count,
-    -- Calculate zone max capacity from items.max_capacity
-    -- max_capacity is automatically calculated by trigger on items table:
-    -- For flat items: stored max_capacity value
-    -- For rack items: SUM(floor_capacities) calculated and stored
-    COALESCE(SUM(i.max_capacity), 0)::INTEGER AS max_capacity,
-    -- Collect all locations for this zone (for WMS matching)
-    array_agg(DISTINCT i.location) FILTER (WHERE i.location IS NOT NULL) AS zone_locations
+    wh.code AS warehouse_code,
+    0 AS layout_count, -- layouts table doesn't exist
+    COUNT(DISTINCT lis.item_id) AS item_count,
+    -- Zone max capacity: sum of all items' max_capacity in this zone
+    COALESCE(SUM(lis.max_capacity), 0)::INTEGER AS max_capacity,
+    -- Zone current stock: sum of all items' current_stock_count in this zone
+    COALESCE(SUM(lis.current_stock_count), 0)::INTEGER AS current_stock,
+    -- Total available quantity
+    COALESCE(SUM(lis.total_available_qty), 0)::NUMERIC AS total_available_qty
   FROM public.zones z
   LEFT JOIN public.warehouses wh ON z.warehouse_id = wh.id
-  LEFT JOIN public.items i ON i.zone_id = z.id
+  LEFT JOIN public.location_inventory_summary_mv lis ON
+    lis.warehouse_id = z.warehouse_id
+    AND UPPER(TRIM(lis.item_zone)) = UPPER(TRIM(z.code))
   GROUP BY z.id, z.code, z.name, z.warehouse_id, wh.code
-),
-wms_current_stock AS (
-  -- Calculate current stock from WMS data by matching BOTH zone AND location
-  -- This matches the original logic: zone must match AND location must match (flat or rack pattern)
-  SELECT
-    zlc.zone_id,
-    COUNT(DISTINCT w.id) AS current_stock_count,
-    SUM(COALESCE(w.available_qty, 0))::NUMERIC AS total_available_qty
-  FROM zone_layout_capacity zlc
-  JOIN public.wms_raw_rows w ON
-    -- Condition 1: Zone must match (direct comparison)
-    EXISTS (
-      SELECT 1
-      FROM public.zones z
-      WHERE normalize_zone_code(w.zone_cd) = normalize_zone_code(w.split_key)
-        AND z.id = zlc.zone_id
-    )
-    AND
-    -- Condition 2: Location must match (flat: exact match, rack: prefix match)
-    EXISTS (
-      SELECT 1
-      FROM unnest(zlc.zone_locations) AS item_location
-      WHERE
-        -- Flat: exact match (e.g., WMS "B1" = item "B1")
-        UPPER(TRIM(w.cell_no)) = UPPER(TRIM(item_location))
-        OR
-        -- Rack: prefix match (e.g., WMS "A1-01-02" starts with item "A1-")
-        UPPER(TRIM(w.cell_no)) LIKE UPPER(TRIM(item_location)) || '-%'
-    )
-  WHERE w.zone_cd IS NOT NULL
-    AND w.cell_no IS NOT NULL
-  GROUP BY zlc.zone_id
 )
 SELECT
-  zlc.zone_id,
-  zlc.zone_code,
-  zlc.zone_name,
-  zlc.warehouse_id,
-  zlc.warehouse_code,
-  zlc.layout_count,
-  zlc.item_count,
-  zlc.max_capacity,
-  -- Current stock from zone AND location matched WMS rows
-  COALESCE(wcs.current_stock_count, 0)::INTEGER AS current_stock,
-  COALESCE(wcs.total_available_qty, 0)::NUMERIC AS total_available_qty,
+  zone_id,
+  zone_code,
+  zone_name,
+  warehouse_id,
+  warehouse_code,
+  layout_count,
+  item_count,
+  max_capacity,
+  current_stock,
+  total_available_qty,
   -- Calculate utilization percentage
   CASE
-    WHEN zlc.max_capacity > 0 THEN
-      ROUND(
-        (COALESCE(wcs.current_stock_count, 0)::NUMERIC / zlc.max_capacity::NUMERIC * 100),
-        2
-      )
+    WHEN max_capacity > 0 THEN
+      ROUND((current_stock::NUMERIC / max_capacity::NUMERIC * 100), 2)
     ELSE 0
   END AS utilization_percentage,
   -- Capacity status categorization
   CASE
-    WHEN zlc.max_capacity = 0 THEN 'no_capacity'
-    WHEN COALESCE(wcs.current_stock_count, 0)::NUMERIC / zlc.max_capacity::NUMERIC >= 0.9 THEN 'critical'
-    WHEN COALESCE(wcs.current_stock_count, 0)::NUMERIC / zlc.max_capacity::NUMERIC >= 0.7 THEN 'high'
-    WHEN COALESCE(wcs.current_stock_count, 0)::NUMERIC / zlc.max_capacity::NUMERIC >= 0.5 THEN 'medium'
+    WHEN max_capacity = 0 THEN 'no_capacity'
+    WHEN current_stock::NUMERIC / NULLIF(max_capacity, 0)::NUMERIC >= 0.9 THEN 'critical'
+    WHEN current_stock::NUMERIC / NULLIF(max_capacity, 0)::NUMERIC >= 0.7 THEN 'high'
+    WHEN current_stock::NUMERIC / NULLIF(max_capacity, 0)::NUMERIC >= 0.5 THEN 'medium'
     ELSE 'low'
   END AS capacity_status,
   NOW() AS last_updated
-FROM zone_layout_capacity zlc
-LEFT JOIN wms_current_stock wcs ON wcs.zone_id = zlc.zone_id;
+FROM zone_aggregates;
 
 -- Create indexes on materialized view
 CREATE UNIQUE INDEX idx_zone_capacities_mv_zone_id
@@ -257,7 +264,9 @@ GRANT EXECUTE ON FUNCTION refresh_zone_capacities() TO authenticated;
 -- Comments
 COMMENT ON MATERIALIZED VIEW public.zone_capacities_mv IS
   'Pre-calculated zone capacities with current stock levels and utilization percentages.
-   Refresh this view after WMS data sync using refresh_zone_capacities() function.';
+   Now based on location_inventory_summary_mv for accurate stock counts.
+   Refresh this view AFTER location_inventory_summary_mv is refreshed.
+   Use refresh_all_materialized_views() to refresh in correct order.';
 
 COMMENT ON FUNCTION refresh_zone_capacities() IS
   'Refreshes the zone_capacities_mv materialized view concurrently (non-blocking).
@@ -1133,14 +1142,19 @@ WHERE split_key IS NOT NULL
     )
   )
 ORDER BY
+  -- Prioritize by urgency: critical/high/medium first, then expired, then low/no_expiry
   CASE
-    WHEN valid_date IS NULL THEN 2  -- No expiry items sort last
-    WHEN valid_date < CURRENT_DATE THEN 0  -- Expired items sort first
-    ELSE 1  -- Expiring items sort second
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 7 THEN 0    -- critical (expiring in 7 days)
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 14 THEN 1   -- high (expiring in 14 days)
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 30 THEN 2   -- medium (expiring in 30 days)
+    WHEN valid_date IS NOT NULL AND valid_date < CURRENT_DATE THEN 3                  -- expired (already expired)
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) > 30 THEN 4    -- low (expiring later)
+    WHEN valid_date IS NULL THEN 5                                                     -- no_expiry
+    ELSE 6
   END,
-  valid_date NULLS LAST,
+  valid_date ASC NULLS LAST,
   available_qty DESC
-LIMIT 500;  -- Increased limit to include expired items and no-expiry items
+LIMIT 1000;  -- Increased limit to ensure we capture enough expiring items
 
 -- Create indexes on materialized view
 CREATE INDEX idx_expiring_items_mv_factory_location
@@ -1159,7 +1173,9 @@ CREATE INDEX idx_expiring_items_mv_days_remaining
 GRANT SELECT ON public.expiring_items_mv TO authenticated, anon;
 
 COMMENT ON MATERIALIZED VIEW public.expiring_items_mv IS
-  'Pre-calculated list of items expiring within 90 days, plus items with no expiry date (top 500).
+  'Pre-calculated list of items expiring within 90 days (top 1000).
+   Prioritizes urgent items (critical/high/medium) over expired items.
+   Urgency order: critical → high → medium → expired → low → no_expiry.
    Includes pre-calculated days_remaining (NULL for items without expiry) and urgency categorization.
    Urgency values: expired, critical, high, medium, low, no_expiry.
    Refresh this view daily or after WMS data sync.';
@@ -1240,27 +1256,7 @@ BEGIN
 
   RAISE NOTICE 'Starting refresh of all materialized views at %', v_start_time;
 
-  -- 1. Zone Capacities MV
-  BEGIN
-    RAISE NOTICE '  Refreshing zone_capacities_mv...';
-    REFRESH MATERIALIZED VIEW CONCURRENTLY public.zone_capacities_mv;
-    v_result := v_result || jsonb_build_object(
-      'view', 'zone_capacities_mv',
-      'status', 'success',
-      'refreshed_at', clock_timestamp()
-    );
-    RAISE NOTICE '  ✓ zone_capacities_mv refreshed successfully';
-  EXCEPTION WHEN OTHERS THEN
-    v_error_count := v_error_count + 1;
-    v_result := v_result || jsonb_build_object(
-      'view', 'zone_capacities_mv',
-      'status', 'error',
-      'error', SQLERRM
-    );
-    RAISE WARNING '  ✗ zone_capacities_mv refresh failed: %', SQLERRM;
-  END;
-
-  -- 2. Dashboard Inventory Stats MV
+  -- 1. Dashboard Inventory Stats MV
   BEGIN
     RAISE NOTICE '  Refreshing dashboard_inventory_stats_mv...';
     REFRESH MATERIALIZED VIEW CONCURRENTLY public.dashboard_inventory_stats_mv;
@@ -1280,7 +1276,7 @@ BEGIN
     RAISE WARNING '  ✗ dashboard_inventory_stats_mv refresh failed: %', SQLERRM;
   END;
 
-  -- 3. Inventory Discrepancies MV (without CONCURRENTLY - no unique index due to LIMIT)
+  -- 2. Inventory Discrepancies MV (without CONCURRENTLY - no unique index due to LIMIT)
   BEGIN
     RAISE NOTICE '  Refreshing inventory_discrepancies_mv...';
     REFRESH MATERIALIZED VIEW public.inventory_discrepancies_mv;
@@ -1300,7 +1296,7 @@ BEGIN
     RAISE WARNING '  ✗ inventory_discrepancies_mv refresh failed: %', SQLERRM;
   END;
 
-  -- 4. WMS Inventory Indexed MV
+  -- 3. WMS Inventory Indexed MV
   BEGIN
     RAISE NOTICE '  Refreshing wms_inventory_indexed_mv...';
     REFRESH MATERIALIZED VIEW CONCURRENTLY public.wms_inventory_indexed_mv;
@@ -1320,7 +1316,7 @@ BEGIN
     RAISE WARNING '  ✗ wms_inventory_indexed_mv refresh failed: %', SQLERRM;
   END;
 
-  -- 5. SAP Inventory Indexed MV
+  -- 4. SAP Inventory Indexed MV
   BEGIN
     RAISE NOTICE '  Refreshing sap_inventory_indexed_mv...';
     REFRESH MATERIALIZED VIEW CONCURRENTLY public.sap_inventory_indexed_mv;
@@ -1340,7 +1336,7 @@ BEGIN
     RAISE WARNING '  ✗ sap_inventory_indexed_mv refresh failed: %', SQLERRM;
   END;
 
-  -- 6. Location Inventory Summary MV
+  -- 5. Location Inventory Summary MV
   BEGIN
     RAISE NOTICE '  Refreshing location_inventory_summary_mv...';
     REFRESH MATERIALIZED VIEW CONCURRENTLY public.location_inventory_summary_mv;
@@ -1358,6 +1354,26 @@ BEGIN
       'error', SQLERRM
     );
     RAISE WARNING '  ✗ location_inventory_summary_mv refresh failed: %', SQLERRM;
+  END;
+
+  -- 6. Zone Capacities MV (depends on location_inventory_summary_mv)
+  BEGIN
+    RAISE NOTICE '  Refreshing zone_capacities_mv...';
+    REFRESH MATERIALIZED VIEW CONCURRENTLY public.zone_capacities_mv;
+    v_result := v_result || jsonb_build_object(
+      'view', 'zone_capacities_mv',
+      'status', 'success',
+      'refreshed_at', clock_timestamp()
+    );
+    RAISE NOTICE '  ✓ zone_capacities_mv refreshed successfully';
+  EXCEPTION WHEN OTHERS THEN
+    v_error_count := v_error_count + 1;
+    v_result := v_result || jsonb_build_object(
+      'view', 'zone_capacities_mv',
+      'status', 'error',
+      'error', SQLERRM
+    );
+    RAISE WARNING '  ✗ zone_capacities_mv refresh failed: %', SQLERRM;
   END;
 
   -- 7. Item Inventory Summary MV
