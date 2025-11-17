@@ -21,10 +21,11 @@ SELECT
   inb_date,
   item_nm,
   uld_id,
-  -- Pre-calculate days remaining
+  -- Pre-calculate days remaining (can be negative for expired items)
   EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP))::INTEGER AS days_remaining,
-  -- Categorize urgency
+  -- Categorize urgency (including expired items)
   CASE
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) < 0 THEN 'expired'
     WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 7 THEN 'critical'
     WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 14 THEN 'high'
     WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 30 THEN 'medium'
@@ -34,10 +35,16 @@ SELECT
 FROM public.wms_raw_rows
 WHERE warehouse_code IS NOT NULL
   AND valid_date IS NOT NULL
-  AND valid_date >= CURRENT_DATE
+  AND valid_date >= CURRENT_DATE - INTERVAL '30 days'  -- Include items expired up to 30 days ago
   AND valid_date <= CURRENT_DATE + INTERVAL '90 days'  -- Look ahead 90 days
-ORDER BY valid_date ASC, available_qty DESC
-LIMIT 200;  -- Store top 200 expiring items
+ORDER BY
+  CASE
+    WHEN valid_date < CURRENT_DATE THEN 0  -- Expired items first
+    ELSE 1
+  END,
+  valid_date ASC,
+  available_qty DESC
+LIMIT 500;  -- Increased limit to include expired items
 
 -- Create indexes on materialized view
 CREATE INDEX idx_expiring_items_mv_warehouse

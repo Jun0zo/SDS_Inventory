@@ -4,10 +4,9 @@ import { cn } from '@/lib/cn';
 interface PageHeaderProps {
   children: ReactNode;
   className?: string;
-  sticky?: boolean;
 }
 
-export function PageHeader({ children, className, sticky = true }: PageHeaderProps) {
+export function PageHeader({ children, className }: PageHeaderProps) {
   return (
     <div className={cn(
       "flex h-14 items-center justify-between border-b bg-background px-6",

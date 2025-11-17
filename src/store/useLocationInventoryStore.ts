@@ -64,7 +64,7 @@ export const fetchLocationInventoryDirect = async (
       location,
       zone: '',
       total_items: 0,
-      unique_item_codes: [],
+      unique_item_codes: 0,
       items: []
     };
   }
@@ -119,7 +119,7 @@ interface LocationInventoryState {
   clearCache: () => void;
 }
 
-export const useLocationInventoryStore = create<LocationInventoryState>((set, get) => ({
+export const useLocationInventoryStore = create<LocationInventoryState>((set) => ({
   inventoryCache: new Map(),
   loading: new Set(),
 

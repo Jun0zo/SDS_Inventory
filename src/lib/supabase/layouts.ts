@@ -165,6 +165,9 @@ export async function getLayoutByWarehouseZone(
         order: dbItem.order_dir,
         perFloorLocations: dbItem.per_floor_locations,
         floorCapacities: dbItem.floor_capacities || undefined,
+        cellAvailability: dbItem.cell_availability || undefined,
+        cellCapacity: dbItem.cell_capacity || undefined,
+        pillarAvailability: dbItem.pillar_availability || undefined,
       } as AnyItem;
     } else {
       return {
@@ -192,8 +195,8 @@ export async function createOrUpdateLayout(params: {
 }): Promise<{ success: boolean; error?: string }> {
   const { warehouseId, zoneName, grid, items } = params;
 
-  const { data: user } = await supabase.auth.getUser();
   // Note: We allow operation even if user is not authenticated (created_by will be null)
+  // const { data: user } = await supabase.auth.getUser();
 
   // First, ensure zone exists and get zone_id
   let zoneId: string;
@@ -250,8 +253,8 @@ export async function createOrUpdateLayout(params: {
     return { success: false, error: updateError.message };
   }
 
-  // Create layout object for compatibility
-  const layout: Layout = {
+  // Create layout object for compatibility (for logging/debugging)
+  console.log('Layout created/updated:', {
     id: updatedZone.id,
     zone_id: updatedZone.id,
     version: updatedZone.grid_version,
@@ -260,7 +263,7 @@ export async function createOrUpdateLayout(params: {
     updated_at: updatedZone.grid_updated_at,
     zone_name: updatedZone.name,
     warehouse_id: updatedZone.warehouse_id,
-  };
+  });
 
   // Delete old items for this zone
   await supabase.from('items').delete().eq('zone_id', zoneId);
@@ -284,13 +287,42 @@ export async function createOrUpdateLayout(params: {
       };
 
       if (item.type === 'rack') {
+        // Validate and resize cellCapacity if dimensions changed
+        let cellCapacity = item.cellCapacity;
+        
+        if (!cellCapacity || 
+            cellCapacity.length !== item.floors ||
+            cellCapacity[0]?.length !== item.rows ||
+            cellCapacity[0]?.[0]?.length !== item.cols) {
+          // Resize or initialize cellCapacity to match current dimensions
+          cellCapacity = Array.from({ length: item.floors }, (_, f) =>
+            Array.from({ length: item.rows }, (_, r) =>
+              Array.from({ length: item.cols }, (_, c) => {
+                // Preserve existing capacity if available, otherwise default to 1
+                return item.cellCapacity?.[f]?.[r]?.[c] ?? 1;
+              })
+            )
+          );
+        }
+
+        // Calculate floor_capacities from cellCapacity to ensure sync
+        const floorCapacities = cellCapacity.map((floor) =>
+          floor.reduce((sum, row) =>
+            sum + row.reduce((rowSum, cap) => rowSum + cap, 0),
+            0
+          )
+        );
+
         return {
           ...baseItem,
           floors: item.floors,
           numbering: item.numbering,
           order_dir: item.order,
           per_floor_locations: item.perFloorLocations,
-          floor_capacities: item.floorCapacities || null,
+          floor_capacities: floorCapacities,
+          cell_availability: item.cellAvailability || null,
+          cell_capacity: cellCapacity,
+          pillar_availability: item.pillarAvailability || null,
         };
       }
 
@@ -347,6 +379,22 @@ export async function createOrUpdateLayout(params: {
         console.warn('Failed to update zone capacities cache');
       } else {
         console.log('Zone capacities cache updated');
+      }
+
+      // Also clear dashboard cache after layout save
+      try {
+        const cacheResponse = await fetch(
+          `${BASE_URL}/api/dashboard/cache/clear?pattern=${encodeURIComponent(warehouse.code)}`,
+          { method: 'POST' }
+        );
+
+        if (!cacheResponse.ok) {
+          console.warn('Failed to clear dashboard cache after layout save');
+        } else {
+          console.log('Dashboard cache cleared after layout save');
+        }
+      } catch (cacheError) {
+        console.warn('Could not clear dashboard cache:', cacheError);
       }
     }
   } catch (error) {
@@ -437,7 +485,42 @@ export async function renameZone(
     return { success: false, error: zoneError.message };
   }
 
-  // Note: zone_name update removed - layouts merged into zones
+  // Update all items in this zone to have the new zone name
+  const { error: itemsError } = await supabase
+    .from('items')
+    .update({ zone: newZoneName })
+    .eq('zone_id', zone.id);
+
+  if (itemsError) {
+    console.error('Failed to update items zone name:', itemsError);
+    return { success: false, error: itemsError.message };
+  }
+
+  // Clear dashboard cache after zone rename
+  try {
+    const { data: warehouse } = await supabase
+      .from('warehouses')
+      .select('code')
+      .eq('id', warehouseId)
+      .single();
+
+    if (warehouse) {
+      const BASE_URL = import.meta.env.VITE_ETL_BASE_URL || 'http://localhost:8787';
+      const response = await fetch(
+        `${BASE_URL}/api/dashboard/cache/clear?pattern=${encodeURIComponent(warehouse.code)}`,
+        { method: 'POST' }
+      );
+
+      if (!response.ok) {
+        console.warn('Failed to clear dashboard cache after zone rename');
+      } else {
+        console.log('Dashboard cache cleared after zone rename');
+      }
+    }
+  } catch (error) {
+    console.warn('Could not clear dashboard cache:', error);
+    // Don't fail the rename operation if cache clearing fails
+  }
 
   return { success: true };
 }
@@ -445,33 +528,41 @@ export async function renameZone(
 /**
  * Log activity
  */
-export async function logActivity(action: string, meta?: Record<string, any>): Promise<void> {
+export async function logActivity(_action: string, _meta?: Record<string, any>): Promise<void> {
   // Temporarily disable activity logging to prevent database errors
   return;
 
-  try {
-    const { data: user } = await supabase.auth.getUser();
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  // try {
+  //   const { data: user } = await supabase.auth.getUser();
 
-    // Only log activity if user is authenticated and has valid ID
-    if (!user.user?.id || typeof user.user.id !== 'string' || user.user.id.length === 0) {
-      console.warn('Cannot log activity: user not authenticated or invalid ID');
-      return;
-    }
+  //   // Only log activity if user is authenticated and has valid ID
+  //   const currentUser = user.user;
+  //   if (!currentUser) {
+  //     console.warn('Cannot log activity: user not authenticated');
+  //     return;
+  //   }
 
-    const { error } = await supabase.from('activity_log').insert({
-      user_id: user.user.id,
-      action,
-      meta,
-    });
+  //   if (!currentUser.id || typeof currentUser.id !== 'string' || currentUser.id.length === 0) {
+  //     console.warn('Cannot log activity: invalid user ID');
+  //     return;
+  //   }
 
-    if (error) {
-      // Ignore activity logging errors (non-critical functionality)
-      console.warn('Failed to log activity:', error.message);
-    }
-  } catch (err) {
-    // Ignore activity logging errors (non-critical functionality)
-    console.warn('Failed to log activity:', err);
-  }
+  //   const { error } = await supabase.from('activity_log').insert({
+  //     user_id: currentUser.id,
+  //     action,
+  //     meta,
+  //   });
+
+  //   if (error) {
+  //     // Ignore activity logging errors (non-critical functionality)
+  //     console.warn('Failed to log activity:', error?.message || 'Unknown error');
+  //   }
+  // } catch (err) {
+  //   // Ignore activity logging errors (non-critical functionality)
+  //   console.warn('Failed to log activity:', err);
+  // }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
 }
 
 /**
@@ -565,7 +656,7 @@ export async function getLayoutByZone(zoneCode: string): Promise<{ layout: Layou
     id: zone.id,
     zone_id: zone.id,
     version: zone.grid_version || 1,
-    grid: zone.grid || {},
+    grid: zone.grid || { cellPx: 24, cols: 100, rows: 100, snap: true, showGrid: true },
     created_by: zone.created_by,
     updated_at: zone.grid_updated_at || zone.updated_at,
     zone_name: zone.name,
@@ -607,6 +698,9 @@ export async function getLayoutByZone(zoneCode: string): Promise<{ layout: Layou
         order: dbItem.order_dir,
         perFloorLocations: dbItem.per_floor_locations,
         floorCapacities: dbItem.floor_capacities || undefined,
+        cellAvailability: dbItem.cell_availability || undefined,
+        cellCapacity: dbItem.cell_capacity || undefined,
+        pillarAvailability: dbItem.pillar_availability || undefined,
       } as AnyItem;
     } else {
       return {

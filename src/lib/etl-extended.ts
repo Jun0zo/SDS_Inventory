@@ -2,7 +2,9 @@
  * Extended ETL API client for sheet sources and data ingestion
  */
 
-const BASE_URL = import.meta.env.VITE_ETL_BASE_URL || 'http://localhost:8787';
+// Use relative path in production (Vercel), localhost in development
+const BASE_URL = import.meta.env.VITE_ETL_BASE_URL 
+  || (import.meta.env.PROD ? '' : 'http://localhost:8787');
 
 // Types
 export interface ClassificationConfig {

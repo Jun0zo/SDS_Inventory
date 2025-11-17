@@ -24,6 +24,24 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 COMMENT ON FUNCTION array_sum_int IS
   'Sums all elements in an integer array, treating NULL values as 0';
 
+-- Function to set warehouse_id from zone_id for items
+CREATE OR REPLACE FUNCTION set_item_warehouse_id()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- zone_id가 설정되어 있고 warehouse_id가 NULL이면 자동 설정
+  IF NEW.zone_id IS NOT NULL AND (NEW.warehouse_id IS NULL OR TG_OP = 'INSERT') THEN
+    SELECT warehouse_id INTO NEW.warehouse_id
+    FROM public.zones
+    WHERE id = NEW.zone_id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION set_item_warehouse_id IS
+  'Automatically sets warehouse_id based on zone_id when creating or updating items';
+
 -- Function to calculate max_capacity for items
 CREATE OR REPLACE FUNCTION calculate_item_max_capacity()
 RETURNS TRIGGER AS $$
@@ -45,12 +63,28 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION calculate_item_max_capacity IS
   'Calculates max_capacity for items based on type and floor_capacities';
 
--- Create trigger on items table (drop if exists first)
+-- Create triggers on items table (drop if exists first)
+DROP TRIGGER IF EXISTS trigger_set_item_warehouse_id ON public.items;
 DROP TRIGGER IF EXISTS trigger_calculate_item_max_capacity ON public.items;
+
+-- warehouse_id 자동 설정 트리거 (먼저 실행)
+CREATE TRIGGER trigger_set_item_warehouse_id
+  BEFORE INSERT OR UPDATE ON public.items
+  FOR EACH ROW
+  EXECUTE FUNCTION set_item_warehouse_id();
+
+-- max_capacity 계산 트리거 (나중에 실행)
 CREATE TRIGGER trigger_calculate_item_max_capacity
   BEFORE INSERT OR UPDATE ON public.items
   FOR EACH ROW
   EXECUTE FUNCTION calculate_item_max_capacity();
+
+-- Update existing items to set warehouse_id from zone_id
+UPDATE public.items
+SET warehouse_id = z.warehouse_id
+FROM public.zones z
+WHERE items.zone_id = z.id
+  AND items.warehouse_id IS NULL;
 
 -- Update existing items to calculate max_capacity
 UPDATE public.items
@@ -551,16 +585,64 @@ COMMENT ON MATERIALIZED VIEW public.sap_inventory_indexed_mv IS
   'Indexed SAP inventory data for fast server-side filtering in Inventory View page.
    Includes normalized columns for case-insensitive search.
    Refresh this view after SAP data sync.';
--- Location Inventory Summary Materialized View
--- Purpose: Pre-aggregate inventory by location for Zone Layout Editor SidePanel
--- Performance: Eliminates API calls for each location selection, pre-aggregates lot distribution
+-- Location Inventory Summary Materialized View (Item-Level)
+-- Purpose: Pre-aggregate inventory by ITEM (not WMS location) for Zone Layout Editor SidePanel and Dashboard heatmap
+-- Performance: Shows data at item granularity, matching inventory_view display level
+-- Granularity: One row per item in items table (like item_inventory_summary_mv)
+-- Key difference from item_inventory_summary_mv: Adds current_capa = COUNT(DISTINCT wms_locations)
+--
+-- Location Matching Logic:
+--   - Zone matching: normalize_zone_code(w.split_key) = normalize_zone_code(i.zone)
+--   - Flat items: exact location match on cell_no (e.g., "B1" = "B1")
+--   - Rack items: pattern match on cell_no (e.g., "A35" matches "A35-01-01", "A35-02-03")
 
 -- Drop existing view if exists
 DROP MATERIALIZED VIEW IF EXISTS public.location_inventory_summary_mv CASCADE;
 
 -- Create materialized view for item-level location inventory summaries
 CREATE MATERIALIZED VIEW public.location_inventory_summary_mv AS
-WITH item_lot_distribution AS (
+WITH rack_capacity_aware_count AS (
+  -- Calculate capacity-aware stock count for rack items
+  -- Logic: If cell capacity = 1, count as 1; if capacity >= 2, count all rows
+  SELECT
+    i.id AS item_id,
+    w.cell_no,
+    COUNT(*) AS row_count,
+    -- Get capacity for this cell location
+    CASE
+      WHEN i.type = 'rack' THEN
+        get_cell_capacity_from_jsonb(
+          i.floor_capacities,
+          (parse_rack_cell_location(w.cell_no)).floor_idx,
+          (parse_rack_cell_location(w.cell_no)).col_idx
+        )
+      ELSE NULL
+    END AS cell_capacity,
+    -- Apply capacity-aware counting logic
+    CASE
+      WHEN i.type = 'rack' THEN
+        CASE
+          WHEN get_cell_capacity_from_jsonb(
+            i.floor_capacities,
+            (parse_rack_cell_location(w.cell_no)).floor_idx,
+            (parse_rack_cell_location(w.cell_no)).col_idx
+          ) = 1 THEN 1  -- Capacity = 1: count as 1
+          ELSE COUNT(*)  -- Capacity >= 2: count all rows
+        END
+      ELSE COUNT(*)  -- Flat items: count all rows
+    END AS capacity_aware_count
+  FROM public.items i
+  JOIN public.warehouses wh ON i.warehouse_id = wh.id
+  JOIN public.wms_raw_rows w ON
+    (
+      (i.type = 'flat' AND UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i.location)))
+      OR
+      (i.type = 'rack' AND UPPER(TRIM(w.cell_no)) ~ ('^' || UPPER(TRIM(i.location)) || '-[0-9]+-[0-9]+$'))
+    )
+  WHERE wh.code IS NOT NULL
+  GROUP BY i.id, i.type, i.floor_capacities, w.cell_no
+),
+item_lot_distribution AS (
   -- Pre-aggregate lot distribution per item to avoid nested aggregation
   SELECT
     i.id AS item_id,
@@ -569,38 +651,30 @@ WITH item_lot_distribution AS (
       lot_agg.lot_count
     ) AS lot_dist_json
   FROM public.items i
-  JOIN public.zones z ON i.zone_id = z.id
+  JOIN public.warehouses wh ON i.warehouse_id = wh.id
   LEFT JOIN (
     SELECT
-      z2.warehouse_code,
+      wh2.code AS warehouse_code,
       i2.id AS item_id,
-      w.production_lot_no AS lot_key,
+      COALESCE(w.production_lot_no, w.lot_no) AS lot_key,
       COUNT(*) AS lot_count,
       SUM(w.available_qty)::NUMERIC AS lot_qty
     FROM public.items i2
-    JOIN public.zones z2 ON i2.zone_id = z2.id
+    JOIN public.warehouses wh2 ON i2.warehouse_id = wh2.id
     JOIN public.wms_raw_rows w ON
-      -- Match zone via warehouse_bindings.source_bindings lookup
-      EXISTS (
-        SELECT 1 FROM public.warehouse_bindings wb
-        WHERE wb.warehouse_id = z2.warehouse_id
-        AND wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'type' = 'wms'
-        AND normalize_zone_code(
-          (wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'split_value')
-        ) = normalize_zone_code(z2.code)
-      )
-      AND (
+      -- Location match only (no zone matching)
+      (
         -- Flat items: exact location match
         (i2.type = 'flat' AND UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i2.location)))
         OR
         -- Rack items: pattern match (A35 matches A35-01-01)
         (i2.type = 'rack' AND UPPER(TRIM(w.cell_no)) ~ ('^' || UPPER(TRIM(i2.location)) || '-[0-9]+-[0-9]+$'))
       )
-    GROUP BY z2.warehouse_code, i2.id, w.production_lot_no
+    GROUP BY wh2.code, i2.id, COALESCE(w.production_lot_no, w.lot_no)
   ) lot_agg ON
-    lot_agg.warehouse_code = z.warehouse_code
+    lot_agg.warehouse_code = wh.code
     AND lot_agg.item_id = i.id
-  WHERE z.warehouse_code IS NOT NULL
+  WHERE wh.code IS NOT NULL
   GROUP BY i.id
 ),
 item_material_aggregation AS (
@@ -615,65 +689,66 @@ item_material_aggregation AS (
       ORDER BY mat.item_total_qty DESC
     ) AS top_materials_json
   FROM public.items i
-  JOIN public.zones z ON i.zone_id = z.id
+  JOIN public.warehouses wh ON i.warehouse_id = wh.id
   LEFT JOIN (
     SELECT
-      z2.warehouse_code,
+      wh2.code AS warehouse_code,
       i2.id AS item_id,
       w.item_code,
       SUM(COALESCE(w.available_qty, 0))::NUMERIC AS item_total_qty
     FROM public.items i2
-    JOIN public.zones z2 ON i2.zone_id = z2.id
+    JOIN public.warehouses wh2 ON i2.warehouse_id = wh2.id
     JOIN public.wms_raw_rows w ON
-      -- Match zone via warehouse_bindings.source_bindings lookup
-      EXISTS (
-        SELECT 1 FROM public.warehouse_bindings wb
-        WHERE wb.warehouse_id = z2.warehouse_id
-        AND wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'type' = 'wms'
-        AND normalize_zone_code(
-          (wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'split_value')
-        ) = normalize_zone_code(z2.code)
-      )
-      AND (
+      -- Location match only (no zone matching)
+      (
         (i2.type = 'flat' AND UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i2.location)))
         OR
         (i2.type = 'rack' AND UPPER(TRIM(w.cell_no)) ~ ('^' || UPPER(TRIM(i2.location)) || '-[0-9]+-[0-9]+$'))
       )
     WHERE w.item_code IS NOT NULL
-    GROUP BY z2.warehouse_code, i2.id, w.item_code
+    GROUP BY wh2.code, i2.id, w.item_code
   ) mat ON
-    mat.warehouse_code = z.warehouse_code
+    mat.warehouse_code = wh.code
     AND mat.item_id = i.id
-  WHERE z.warehouse_code IS NOT NULL
+  WHERE wh.code IS NOT NULL
   GROUP BY i.id
 )
 SELECT
   i.id AS item_id,
-  NULL AS layout_id, -- layouts table doesn't exist
+  i.warehouse_id,
   wh.code as warehouse_code,
   i.zone AS item_zone,
   i.location AS item_location,  -- Items table location name (e.g., "A35", "B1")
+  w.split_key AS wms_split_key,  -- WMS split_key (zone info)
   i.type,
   i.max_capacity,
-  -- Current stock count: COUNT based on item type
-  -- For rack: COUNT of unique WMS cell_no (locations)
-  -- For flat: COUNT of WMS rows (items can share locations)
-  CASE
-    WHEN i.type = 'rack' THEN COUNT(DISTINCT w.cell_no) FILTER (WHERE w.id IS NOT NULL)
-    ELSE COUNT(*) FILTER (WHERE w.id IS NOT NULL)
-  END AS current_stock_count,
-  -- Summary statistics
-  COUNT(*) FILTER (WHERE w.id IS NOT NULL) AS total_items,
+  -- Current stock count: capacity-aware counting
+  -- For rack with capacity = 1: count as 1 per location
+  -- For rack with capacity >= 2 or flat: count all rows
+  COALESCE(
+    (SELECT SUM(rcac.capacity_aware_count)
+     FROM rack_capacity_aware_count rcac
+     WHERE rcac.item_id = i.id),
+    0
+  )::INTEGER AS current_stock_count,
+  -- Summary statistics (total_items = same as current_stock_count for consistency)
+  COALESCE(
+    (SELECT SUM(rcac.capacity_aware_count)
+     FROM rack_capacity_aware_count rcac
+     WHERE rcac.item_id = i.id),
+    0
+  )::INTEGER AS total_items,
   SUM(COALESCE(w.available_qty, 0))::NUMERIC AS total_available_qty,
   SUM(COALESCE(w.tot_qty, 0))::NUMERIC AS total_qty,
   COUNT(DISTINCT w.item_code) FILTER (WHERE w.item_code IS NOT NULL) AS unique_item_codes,
-  COUNT(DISTINCT w.production_lot_no) FILTER (WHERE w.production_lot_no IS NOT NULL) AS unique_lots,
+  COUNT(DISTINCT COALESCE(w.production_lot_no, w.lot_no)) FILTER (WHERE COALESCE(w.production_lot_no, w.lot_no) IS NOT NULL) AS unique_lots,
   -- Items as JSON array (ALL items for SidePanel)
   jsonb_agg(
     jsonb_build_object(
       'id', w.id,
       'item_code', w.item_code,
-      'lot_key', w.production_lot_no,
+      'lot_key', COALESCE(w.production_lot_no, w.lot_no),
+      'production_lot_no', w.production_lot_no,
       'available_qty', w.available_qty,
       'total_qty', w.tot_qty,
       'inb_date', w.inb_date,
@@ -682,7 +757,7 @@ SELECT
       'item_name', w.item_nm,
       'cell_no', w.cell_no  -- WMS cell_no for reference
     )
-    ORDER BY w.available_qty DESC NULLS LAST, w.cell_no, w.item_code, w.production_lot_no
+    ORDER BY w.available_qty DESC NULLS LAST, w.cell_no, w.item_code, COALESCE(w.production_lot_no, w.lot_no)
   ) FILTER (WHERE w.id IS NOT NULL) AS items_json,
   -- Lot distribution (from pre-aggregated CTE)
   ld.lot_dist_json AS lot_distribution,
@@ -692,28 +767,21 @@ SELECT
   CASE
     WHEN i.max_capacity > 0 THEN
       ROUND((
-        CASE
-          WHEN i.type = 'rack' THEN COUNT(DISTINCT w.cell_no) FILTER (WHERE w.id IS NOT NULL)
-          ELSE COUNT(*) FILTER (WHERE w.id IS NOT NULL)
-        END::NUMERIC / i.max_capacity
+        COALESCE(
+          (SELECT SUM(rcac.capacity_aware_count)
+           FROM rack_capacity_aware_count rcac
+           WHERE rcac.item_id = i.id),
+          0
+        )::NUMERIC / i.max_capacity
       ) * 100, 2)
     ELSE 0
   END AS utilization_percentage,
   MAX(w.fetched_at) AS last_updated
 FROM public.items i
-JOIN public.zones z ON i.zone_id = z.id
-JOIN public.warehouses wh ON z.warehouse_id = wh.id
+JOIN public.warehouses wh ON i.warehouse_id = wh.id
 LEFT JOIN public.wms_raw_rows w ON
-  -- Match zone via warehouse_bindings.source_bindings lookup
-  EXISTS (
-    SELECT 1 FROM public.warehouse_bindings wb
-    WHERE wb.warehouse_id = wh.id
-    AND wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'type' = 'wms'
-    AND normalize_zone_code(
-      (wb.source_bindings->(w.source_id::text || '::' || w.split_key)->>'split_value')
-    ) = normalize_zone_code(w.split_key)
-  )
-  AND (
+  -- Location match only (no zone matching)
+  (
     -- Flat items: exact location match
     (i.type = 'flat' AND UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i.location)))
     OR
@@ -724,15 +792,15 @@ LEFT JOIN item_lot_distribution ld ON ld.item_id = i.id
 LEFT JOIN item_material_aggregation ma ON ma.item_id = i.id
 WHERE wh.code IS NOT NULL
 GROUP BY
-  i.id, wh.code, i.zone, i.location, i.type, i.max_capacity,
+  i.id, i.warehouse_id, wh.code, i.zone, i.location, w.split_key, i.type, i.max_capacity,
   ld.lot_dist_json, ma.top_materials_json;
 
 -- Create indexes on materialized view
 CREATE UNIQUE INDEX idx_location_inventory_summary_mv_item_id
   ON public.location_inventory_summary_mv(item_id);
 
-CREATE INDEX idx_location_inventory_summary_mv_layout
-  ON public.location_inventory_summary_mv(layout_id);
+CREATE INDEX idx_location_inventory_summary_mv_warehouse_id
+  ON public.location_inventory_summary_mv(warehouse_id);
 
 CREATE INDEX idx_location_inventory_summary_mv_warehouse
   ON public.location_inventory_summary_mv(warehouse_code);
@@ -742,6 +810,9 @@ CREATE INDEX idx_location_inventory_summary_mv_location
 
 CREATE INDEX idx_location_inventory_summary_mv_zone
   ON public.location_inventory_summary_mv(item_zone);
+
+CREATE INDEX idx_location_inventory_summary_mv_wms_split_key
+  ON public.location_inventory_summary_mv(wms_split_key);
 
 CREATE INDEX idx_location_inventory_summary_mv_type
   ON public.location_inventory_summary_mv(type);
@@ -755,25 +826,27 @@ GRANT SELECT ON public.location_inventory_summary_mv TO authenticated, anon;
 -- Comments
 COMMENT ON MATERIALIZED VIEW public.location_inventory_summary_mv IS
   'Pre-aggregated inventory summaries by ITEM (not WMS location) for Zone Layout Editor SidePanel and Dashboard heatmap.
-   Granularity: One row per item in items table (matching inventory_view display level).
+   Granularity: One row per item in items table.
 
    Key columns:
    - item_id: Primary key from items table
    - item_location: Items table location name (e.g., "A35", "B1")
-   - current_stock_count: COUNT based on item type (rack: unique locations, flat: item count)
+   - wms_split_key: WMS split_key (warehouse/zone info from matched WMS data)
+   - current_stock_count: Capacity-aware count (for rack cells with capacity=1, counts as 1; otherwise counts all WMS rows)
    - max_capacity: From items table (theoretical max)
    - utilization_percentage: (current_stock_count / max_capacity) * 100
 
-   Location matching logic:
-   - Flat items: exact location match (e.g., "B1" = "B1")
-   - Rack items: pattern match (e.g., "A35" matches "A35-01-01", "A35-02-03", etc. using regex)
+   Location matching logic (zone matching removed):
+   - Flat items: exact location match on cell_no (e.g., "B1" = "B1")
+   - Rack items: pattern match on cell_no (e.g., "A35" matches "A35-01-01", "A35-02-03", etc. using regex)
 
-   Key difference from item_inventory_summary_mv:
-   - This view adds current_stock_count = COUNT based on item type
-   - item_inventory_summary_mv has current_stock = COUNT(DISTINCT wms_rows)
+   Capacity-aware counting:
+   - For rack cells with capacity = 1: count as 1 (regardless of ULD count)
+   - For rack cells with capacity >= 2: count all WMS rows (each ULD is unique)
+   - For flat items: count all WMS rows
 
    Note: items_json contains ALL items (not paginated) for SidePanel display.
-   Refresh this view after WMS data sync or layout changes.';
+   Refresh this view after WMS data sync or item changes.';
 -- Item Inventory Summary Materialized View
 -- Purpose: Pre-calculate inventory for each layout component (items table)
 -- Used by: Zone Layout Editor to display current stock for each rack/flat component
@@ -1031,23 +1104,43 @@ SELECT
   inb_date,
   item_nm,
   uld_id,
-  -- Pre-calculate days remaining
-  EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP))::INTEGER AS days_remaining,
-  -- Categorize urgency
+  -- Calculate days_remaining, return NULL if valid_date is NULL
   CASE
-    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 7 THEN 'critical'
-    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 14 THEN 'high'
-    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 30 THEN 'medium'
-    ELSE 'low'
+    WHEN valid_date IS NOT NULL THEN
+      EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP))::INTEGER
+    ELSE
+      NULL
+  END AS days_remaining,
+  -- Calculate urgency, use 'no_expiry' if valid_date is NULL
+  CASE
+    WHEN valid_date IS NULL THEN 'no_expiry'::text
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) < 0 THEN 'expired'::text
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 7 THEN 'critical'::text
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 14 THEN 'high'::text
+    WHEN EXTRACT(DAY FROM (valid_date::timestamp - CURRENT_TIMESTAMP)) <= 30 THEN 'medium'::text
+    ELSE 'low'::text
   END AS urgency,
   CURRENT_TIMESTAMP AS last_updated
 FROM public.wms_raw_rows
 WHERE split_key IS NOT NULL
-  AND valid_date IS NOT NULL
-  AND valid_date >= CURRENT_DATE
-  AND valid_date <= CURRENT_DATE + INTERVAL '90 days'  -- Look ahead 90 days
-ORDER BY valid_date ASC, available_qty DESC
-LIMIT 200;  -- Store top 200 expiring items
+  -- Include items with valid_date OR items without valid_date
+  AND (
+    valid_date IS NULL  -- Items without expiry date
+    OR (
+      -- Items with expiry date within range
+      valid_date >= CURRENT_DATE - INTERVAL '30 days'  -- Include items expired up to 30 days ago
+      AND valid_date <= CURRENT_DATE + INTERVAL '90 days'  -- Look ahead 90 days
+    )
+  )
+ORDER BY
+  CASE
+    WHEN valid_date IS NULL THEN 2  -- No expiry items sort last
+    WHEN valid_date < CURRENT_DATE THEN 0  -- Expired items sort first
+    ELSE 1  -- Expiring items sort second
+  END,
+  valid_date NULLS LAST,
+  available_qty DESC
+LIMIT 500;  -- Increased limit to include expired items and no-expiry items
 
 -- Create indexes on materialized view
 CREATE INDEX idx_expiring_items_mv_factory_location
@@ -1066,8 +1159,9 @@ CREATE INDEX idx_expiring_items_mv_days_remaining
 GRANT SELECT ON public.expiring_items_mv TO authenticated, anon;
 
 COMMENT ON MATERIALIZED VIEW public.expiring_items_mv IS
-  'Pre-calculated list of items expiring within 90 days (top 200 by expiry date).
-   Includes pre-calculated days_remaining and urgency categorization.
+  'Pre-calculated list of items expiring within 90 days, plus items with no expiry date (top 500).
+   Includes pre-calculated days_remaining (NULL for items without expiry) and urgency categorization.
+   Urgency values: expired, critical, high, medium, low, no_expiry.
    Refresh this view daily or after WMS data sync.';
 
 -- ========================================

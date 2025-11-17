@@ -23,7 +23,7 @@ export function Toolbox() {
       cols: 3,
       numbering: 'col-major',
       order: 'asc',
-      perFloorLocations: true,
+      perFloorLocations: false,
     };
     addItem(rack);
   };
@@ -40,6 +40,7 @@ export function Toolbox() {
       h: 6,
       rows: 2,
       cols: 4,
+      maxCapacity: 36,
     };
     addItem(flat);
   };

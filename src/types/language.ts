@@ -36,12 +36,44 @@ export interface Translations {
   warehouse: string;
   warehouses: string;
   zone: string;
-  zones: string;
   selectedWarehouses: string;
   zoneHeatmap: string;
   inventoryDiscrepancies: string;
   recentActivity: string;
   stockDays: string;
+
+  // Expiring Items
+  expiringItems: string;
+  expiringItemsDescription: string;
+  noExpiringItems: string;
+  expiringItemsDetail: string;
+  expiringItemsDetailDescription: string;
+  itemsList: string;
+  allItems: string;
+  expired: string;
+  critical: string;
+  high: string;
+  medium: string;
+  low: string;
+  noExpiry: string;
+  expiredWithCount: string;
+  criticalDays: string;
+  highDays: string;
+  mediumDays: string;
+  lowDays: string;
+  daysRemaining: string;
+  daysElapsed: string;
+  expiredElapsed: string;
+  expiredElapsedDays: string;
+  validDate: string;
+  expirationDate: string;
+  gracePeriod: string;
+  gracePeriodDays: string;
+  gracePeriodTitle: string;
+  gracePeriodDescription: string;
+  gracePeriodExample: string;
+  withinGracePeriod: string;
+  noItemsForUrgency: string;
 
   // Stock Days Detail Modal
   stockDaysDetail: string;
@@ -58,7 +90,6 @@ export interface Translations {
   currentStock: string;
   dailyConsumption: string;
   status: string;
-  material: string;
   days: string;
 
   // Stock Status
@@ -76,6 +107,7 @@ export interface Translations {
   quantity: string;
   stockRatio: string;
   stockQuantity: string;
+  material: string;
 
   // Production Lines
   productionLines: string;
@@ -83,7 +115,6 @@ export interface Translations {
   productionLineName: string;
   dailyProductionCapacity: string;
   billOfMaterials: string;
-  material: string;
   unit: string;
   lineCount: string;
 

@@ -16,7 +16,6 @@ export function ProductionLineManagementDialog({
   warehouse
 }: ProductionLineManagementDialogProps) {
   const [productionLines, setProductionLines] = useState<ProductionLine[]>([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (open && warehouse) {
@@ -27,7 +26,6 @@ export function ProductionLineManagementDialog({
   const loadProductionLines = async () => {
     if (!warehouse) return;
 
-    setLoading(true);
     try {
       const response = await fetch(`/api/production-lines/${warehouse.id}`);
       if (!response.ok) {
@@ -41,8 +39,6 @@ export function ProductionLineManagementDialog({
         description: error.message,
         variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
   };
 

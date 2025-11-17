@@ -167,9 +167,9 @@ export function ZoneManagementDialog({
 
   const handleStartGridEdit = async (zone: ZoneInfo) => {
     try {
-      const { grid } = await getLayoutByWarehouseZone(warehouseId, zone.name);
+      const { layout } = await getLayoutByWarehouseZone(warehouseId, zone.name);
       setEditingGrid(zone.name);
-      setGridSettings(grid);
+      setGridSettings(layout?.grid || null);
     } catch (error) {
       console.error('Failed to load grid settings:', error);
       toast({

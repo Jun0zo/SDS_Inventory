@@ -31,6 +31,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Search, Package, Filter, X, Settings, Plus, Trash2, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase/client';
 
 interface Material {
   id: string;
@@ -38,18 +39,12 @@ interface Material {
   description: string | null;
   unit: string | null;
   major_category: string | null;
-  minor_category: string | null;
+  minor_category_id: string | null;  // UUID reference
+  minor_category?: MinorCategory;    // Joined data from API
   source_system: string | null;
   first_seen_at: string;
   last_seen_at: string;
   updated_at: string;
-}
-
-interface MaterialsResponse {
-  data: Material[];
-  total: number;
-  limit: number;
-  offset: number;
 }
 
 interface MajorCategory {
@@ -57,6 +52,16 @@ interface MajorCategory {
   name: string;
   description: string | null;
   color: string | null;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface MinorCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  major_category_id: string;
   display_order: number;
   created_at: string;
   updated_at: string;
@@ -76,11 +81,12 @@ export default function MaterialsPage() {
   // Major categories state
   const [majorCategories, setMajorCategories] = useState<MajorCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
-  
+
+  // Minor categories state
+  const [minorCategories, setMinorCategories] = useState<MinorCategory[]>([]);
+
   // Inline editing state
-  const [editingItemCode, setEditingItemCode] = useState<string | null>(null);
   const [savingItemCode, setSavingItemCode] = useState<string | null>(null);
-  const [tempMinorCategories, setTempMinorCategories] = useState<Record<string, string>>({});
 
   // Manage categories dialog state
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
@@ -90,21 +96,28 @@ export default function MaterialsPage() {
   const [editCategoryName, setEditCategoryName] = useState('');
   const [editCategoryDescription, setEditCategoryDescription] = useState('');
 
+  // Minor category management state
+  const [expandedMajorCategories, setExpandedMajorCategories] = useState<Set<string>>(new Set());
+  const [newMinorCategoryName, setNewMinorCategoryName] = useState<Record<string, string>>({});
+  const [newMinorCategoryDescription, setNewMinorCategoryDescription] = useState<Record<string, string>>({});
+  const [editingMinorCategory, setEditingMinorCategory] = useState<MinorCategory | null>(null);
+  const [editMinorCategoryName, setEditMinorCategoryName] = useState('');
+  const [editMinorCategoryDescription, setEditMinorCategoryDescription] = useState('');
+
   const { toast } = useToast();
 
   // Fetch major categories
   const fetchMajorCategories = async () => {
     setLoadingCategories(true);
     try {
-      const response = await fetch('/api/materials/categories/major');
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Failed to fetch categories:', response.status, errorText);
-        throw new Error(`Failed to fetch categories: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      setMajorCategories(data.categories || []);
+      const { data, error } = await supabase
+        .from('major_categories')
+        .select('*')
+        .order('display_order');
+
+      if (error) throw error;
+
+      setMajorCategories(data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
       // Set empty array so UI doesn't break
@@ -119,25 +132,58 @@ export default function MaterialsPage() {
     }
   };
 
+  // Fetch all minor categories
+  const fetchMinorCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('minor_categories')
+        .select('*')
+        .order('display_order');
+
+      if (error) throw error;
+
+      setMinorCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching minor categories:', error);
+      setMinorCategories([]);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch minor categories',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Fetch materials
   const fetchMaterials = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        offset: offset.toString(),
-      });
-      
-      if (searchTerm) params.append('search', searchTerm);
-      if (filterMajorCategory) params.append('major_category', filterMajorCategory);
-      if (filterMinorCategory) params.append('minor_category', filterMinorCategory);
+      // Build query
+      let query = supabase.from('materials').select('*', { count: 'exact' });
 
-      const response = await fetch(`/api/materials?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch materials');
-      
-      const data: MaterialsResponse = await response.json();
-      setMaterials(data.data);
-      setTotal(data.total);
+      // Apply filters
+      if (filterMajorCategory) {
+        query = query.eq('major_category', filterMajorCategory);
+      }
+
+      if (filterMinorCategory) {
+        query = query.eq('minor_category_id', filterMinorCategory);
+      }
+
+      if (searchTerm) {
+        // Search in item_code or description
+        query = query.or(`item_code.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+      }
+
+      // Apply pagination and ordering
+      query = query.order('item_code', { ascending: true }).range(offset, offset + limit - 1);
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+
+      setMaterials(data || []);
+      setTotal(count || 0);
     } catch (error) {
       console.error('Error fetching materials:', error);
       toast({
@@ -152,6 +198,7 @@ export default function MaterialsPage() {
 
   useEffect(() => {
     fetchMajorCategories();
+    fetchMinorCategories();
   }, []);
 
   useEffect(() => {
@@ -174,22 +221,22 @@ export default function MaterialsPage() {
   // Update material category
   const updateMaterialCategory = async (
     itemCode: string,
-    field: 'major_category' | 'minor_category',
+    field: 'major_category' | 'minor_category_id',
     value: string | null
   ) => {
     setSavingItemCode(itemCode);
     try {
-      const response = await fetch(`/api/materials/${encodeURIComponent(itemCode)}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          [field]: value || null,
-        }),
-      });
+      const updateData = {
+        [field]: value || null,
+        updated_at: new Date().toISOString(),
+      };
 
-      if (!response.ok) throw new Error('Failed to update material');
+      const { error } = await supabase
+        .from('materials')
+        .update(updateData)
+        .eq('item_code', itemCode);
+
+      if (error) throw error;
 
       // Update local state
       setMaterials((prev) =>
@@ -228,21 +275,26 @@ export default function MaterialsPage() {
     }
 
     try {
-      const response = await fetch('/api/materials/categories/major', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Check if category already exists
+      const { data: existing } = await supabase
+        .from('major_categories')
+        .select('*')
+        .eq('name', newCategoryName.trim());
+
+      if (existing && existing.length > 0) {
+        throw new Error(`Category '${newCategoryName.trim()}' already exists`);
+      }
+
+      // Create category
+      const { error } = await supabase
+        .from('major_categories')
+        .insert({
           name: newCategoryName.trim(),
           description: newCategoryDescription.trim() || null,
-        }),
-      });
+          display_order: 0,
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create category');
-      }
+      if (error) throw error;
 
       toast({
         title: 'Success',
@@ -266,21 +318,30 @@ export default function MaterialsPage() {
     if (!editingCategory) return;
 
     try {
-      const response = await fetch(`/api/materials/categories/major/${editingCategory.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Check if new name conflicts with existing category
+      if (editCategoryName.trim() !== editingCategory.name) {
+        const { data: existing } = await supabase
+          .from('major_categories')
+          .select('*')
+          .eq('name', editCategoryName.trim())
+          .neq('id', editingCategory.id);
+
+        if (existing && existing.length > 0) {
+          throw new Error(`Category '${editCategoryName.trim()}' already exists`);
+        }
+      }
+
+      // Update category
+      const { error } = await supabase
+        .from('major_categories')
+        .update({
           name: editCategoryName.trim(),
           description: editCategoryDescription.trim() || null,
-        }),
-      });
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingCategory.id);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to update category');
-      }
+      if (error) throw error;
 
       toast({
         title: 'Success',
@@ -308,11 +369,19 @@ export default function MaterialsPage() {
     }
 
     try {
-      const response = await fetch(`/api/materials/categories/major/${category.id}`, {
-        method: 'DELETE',
-      });
+      // Update materials using this category to NULL
+      await supabase
+        .from('materials')
+        .update({ major_category: null })
+        .eq('major_category', category.name);
 
-      if (!response.ok) throw new Error('Failed to delete category');
+      // Delete category
+      const { error } = await supabase
+        .from('major_categories')
+        .delete()
+        .eq('id', category.id);
+
+      if (error) throw error;
 
       toast({
         title: 'Success',
@@ -343,16 +412,195 @@ export default function MaterialsPage() {
     setEditCategoryDescription('');
   };
 
+  // Minor category management functions
+  const handleCreateMinorCategory = async (majorCategoryId: string) => {
+    const name = newMinorCategoryName[majorCategoryId]?.trim();
+    if (!name) {
+      toast({
+        title: 'Error',
+        description: 'Minor category name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Check if minor category already exists for this major category
+      const { data: existing } = await supabase
+        .from('minor_categories')
+        .select('*')
+        .eq('name', name)
+        .eq('major_category_id', majorCategoryId);
+
+      if (existing && existing.length > 0) {
+        throw new Error(`Minor category '${name}' already exists for this major category`);
+      }
+
+      // Create minor category
+      const { error } = await supabase
+        .from('minor_categories')
+        .insert({
+          name,
+          major_category_id: majorCategoryId,
+          description: newMinorCategoryDescription[majorCategoryId]?.trim() || null,
+          display_order: 0,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Minor category created successfully',
+      });
+
+      // Clear inputs for this major category
+      setNewMinorCategoryName((prev) => {
+        const next = { ...prev };
+        delete next[majorCategoryId];
+        return next;
+      });
+      setNewMinorCategoryDescription((prev) => {
+        const next = { ...prev };
+        delete next[majorCategoryId];
+        return next;
+      });
+
+      fetchMinorCategories();
+    } catch (error: any) {
+      console.error('Error creating minor category:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create minor category',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleUpdateMinorCategory = async () => {
+    if (!editingMinorCategory) return;
+
+    try {
+      // Check if new name conflicts with existing minor category
+      if (editMinorCategoryName.trim() !== editingMinorCategory.name) {
+        const { data: existing } = await supabase
+          .from('minor_categories')
+          .select('*')
+          .eq('name', editMinorCategoryName.trim())
+          .eq('major_category_id', editingMinorCategory.major_category_id)
+          .neq('id', editingMinorCategory.id);
+
+        if (existing && existing.length > 0) {
+          throw new Error(`Minor category '${editMinorCategoryName.trim()}' already exists for this major category`);
+        }
+      }
+
+      // Update minor category
+      const { error } = await supabase
+        .from('minor_categories')
+        .update({
+          name: editMinorCategoryName.trim(),
+          description: editMinorCategoryDescription.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingMinorCategory.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Minor category updated successfully',
+      });
+
+      setEditingMinorCategory(null);
+      setEditMinorCategoryName('');
+      setEditMinorCategoryDescription('');
+      fetchMinorCategories();
+      fetchMaterials();
+    } catch (error: any) {
+      console.error('Error updating minor category:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update minor category',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteMinorCategory = async (minorCategory: MinorCategory) => {
+    if (!confirm(`Are you sure you want to delete "${minorCategory.name}"? Materials using this category will be unset.`)) {
+      return;
+    }
+
+    try {
+      // Update materials using this minor category to NULL
+      await supabase
+        .from('materials')
+        .update({ minor_category_id: null })
+        .eq('minor_category_id', minorCategory.id);
+
+      // Delete minor category
+      const { error } = await supabase
+        .from('minor_categories')
+        .delete()
+        .eq('id', minorCategory.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Minor category deleted successfully',
+      });
+
+      fetchMinorCategories();
+      fetchMaterials();
+    } catch (error) {
+      console.error('Error deleting minor category:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete minor category',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const startEditMinorCategory = (minorCategory: MinorCategory) => {
+    setEditingMinorCategory(minorCategory);
+    setEditMinorCategoryName(minorCategory.name);
+    setEditMinorCategoryDescription(minorCategory.description || '');
+  };
+
+  const cancelEditMinorCategory = () => {
+    setEditingMinorCategory(null);
+    setEditMinorCategoryName('');
+    setEditMinorCategoryDescription('');
+  };
+
+  const toggleMajorCategoryExpansion = (categoryId: string) => {
+    setExpandedMajorCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
+  };
+
   const totalPages = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
 
   return (
     <div className="h-full flex flex-col">
-      <PageHeader
-        title="Materials Management"
-        description="Manage item classifications and categories"
-        icon={<Package className="h-6 w-6" />}
-      />
+      <PageHeader>
+        <div className="flex items-center gap-4">
+          <Package className="h-6 w-6" />
+          <div>
+            <h1 className="text-2xl font-bold">Materials Management</h1>
+            <p className="text-sm text-muted-foreground">Manage item classifications and categories</p>
+          </div>
+        </div>
+      </PageHeader>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
         <Card>
@@ -512,45 +760,58 @@ export default function MaterialsPage() {
                             <TableCell>
                               {savingItemCode === material.item_code ? (
                                 <span className="text-sm text-muted-foreground">Saving...</span>
-                              ) : (
-                                <Input
-                                  value={
-                                    tempMinorCategories[material.item_code] !== undefined
-                                      ? tempMinorCategories[material.item_code]
-                                      : material.minor_category || ''
-                                  }
-                                  onChange={(e) => {
-                                    setTempMinorCategories((prev) => ({
-                                      ...prev,
-                                      [material.item_code]: e.target.value,
-                                    }));
-                                  }}
-                                  onBlur={() => {
-                                    const newValue = tempMinorCategories[material.item_code];
-                                    if (newValue !== undefined && newValue !== material.minor_category) {
+                              ) : (() => {
+                                // Get major category ID for this material
+                                const majorCat = majorCategories.find(
+                                  (cat) => cat.name === material.major_category
+                                );
+
+                                // Filter minor categories for this major category
+                                const availableMinorCategories = majorCat
+                                  ? minorCategories.filter(
+                                      (minor) => minor.major_category_id === majorCat.id
+                                    )
+                                  : [];
+
+                                const hasMinorCategories = availableMinorCategories.length > 0;
+                                const isDisabled = !material.major_category || !hasMinorCategories;
+
+                                return (
+                                  <Select
+                                    value={material.minor_category_id || '__none__'}
+                                    onValueChange={(value) =>
                                       updateMaterialCategory(
                                         material.item_code,
-                                        'minor_category',
-                                        newValue || null
-                                      );
+                                        'minor_category_id',
+                                        value === '__none__' ? null : value
+                                      )
                                     }
-                                    // Clear temp value
-                                    setTempMinorCategories((prev) => {
-                                      const newTemp = { ...prev };
-                                      delete newTemp[material.item_code];
-                                      return newTemp;
-                                    });
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.currentTarget.blur();
-                                    }
-                                  }}
-                                  placeholder="Enter minor category..."
-                                  className="h-8"
-                                  disabled={savingItemCode === material.item_code}
-                                />
-                              )}
+                                    disabled={savingItemCode === material.item_code || isDisabled}
+                                  >
+                                    <SelectTrigger className="h-8">
+                                      <SelectValue
+                                        placeholder={
+                                          !material.major_category
+                                            ? "Select major first"
+                                            : !hasMinorCategories
+                                            ? "No minor categories"
+                                            : "Select minor category"
+                                        }
+                                      />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none__">
+                                        <span className="text-muted-foreground">Not set</span>
+                                      </SelectItem>
+                                      {availableMinorCategories.map((minor) => (
+                                        <SelectItem key={minor.id} value={minor.id}>
+                                          {minor.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs">
@@ -682,31 +943,170 @@ export default function MaterialsPage() {
                         </div>
                       ) : (
                         // View mode
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="font-semibold">{category.name}</div>
-                            {category.description && (
-                              <div className="text-sm text-muted-foreground mt-1">
-                                {category.description}
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="font-semibold">{category.name}</div>
+                              {category.description && (
+                                <div className="text-sm text-muted-foreground mt-1">
+                                  {category.description}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => toggleMajorCategoryExpansion(category.id)}
+                              >
+                                {expandedMajorCategories.has(category.id) ? 'Hide' : 'Show'} Minor Categories
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => startEditCategory(category)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteCategory(category)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Minor categories section */}
+                          {expandedMajorCategories.has(category.id) && (
+                            <div className="ml-4 pl-4 border-l-2 space-y-3">
+                              {/* Add new minor category */}
+                              <div className="space-y-2 p-3 bg-muted/30 rounded-lg">
+                                <div className="text-xs font-semibold text-muted-foreground">
+                                  Add Minor Category
+                                </div>
+                                <div className="space-y-2">
+                                  <Input
+                                    placeholder="Minor category name..."
+                                    value={newMinorCategoryName[category.id] || ''}
+                                    onChange={(e) =>
+                                      setNewMinorCategoryName((prev) => ({
+                                        ...prev,
+                                        [category.id]: e.target.value,
+                                      }))
+                                    }
+                                    className="h-8"
+                                  />
+                                  <Input
+                                    placeholder="Description (optional)..."
+                                    value={newMinorCategoryDescription[category.id] || ''}
+                                    onChange={(e) =>
+                                      setNewMinorCategoryDescription((prev) => ({
+                                        ...prev,
+                                        [category.id]: e.target.value,
+                                      }))
+                                    }
+                                    className="h-8"
+                                  />
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleCreateMinorCategory(category.id)}
+                                    className="w-full"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add Minor Category
+                                  </Button>
+                                </div>
                               </div>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => startEditCategory(category)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteCategory(category)}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
+
+                              {/* Existing minor categories */}
+                              {(() => {
+                                const categoryMinors = minorCategories.filter(
+                                  (minor) => minor.major_category_id === category.id
+                                );
+                                return categoryMinors.length === 0 ? (
+                                  <div className="text-xs text-muted-foreground text-center py-2">
+                                    No minor categories yet
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {categoryMinors.map((minor) => (
+                                      <div key={minor.id} className="p-2 bg-muted/20 rounded border">
+                                        {editingMinorCategory?.id === minor.id ? (
+                                          // Edit mode for minor category
+                                          <div className="space-y-2">
+                                            <Input
+                                              value={editMinorCategoryName}
+                                              onChange={(e) =>
+                                                setEditMinorCategoryName(e.target.value)
+                                              }
+                                              className="h-8"
+                                            />
+                                            <Input
+                                              value={editMinorCategoryDescription}
+                                              onChange={(e) =>
+                                                setEditMinorCategoryDescription(e.target.value)
+                                              }
+                                              placeholder="Description (optional)..."
+                                              className="h-8"
+                                            />
+                                            <div className="flex gap-2">
+                                              <Button
+                                                size="sm"
+                                                onClick={handleUpdateMinorCategory}
+                                              >
+                                                Save
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={cancelEditMinorCategory}
+                                              >
+                                                Cancel
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          // View mode for minor category
+                                          <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                              <div className="text-sm font-medium">
+                                                {minor.name}
+                                              </div>
+                                              {minor.description && (
+                                                <div className="text-xs text-muted-foreground mt-0.5">
+                                                  {minor.description}
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="flex gap-1">
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => startEditMinorCategory(minor)}
+                                                className="h-7 w-7 p-0"
+                                              >
+                                                <Edit className="h-3 w-3" />
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleDeleteMinorCategory(minor)}
+                                                className="h-7 w-7 p-0"
+                                              >
+                                                <Trash2 className="h-3 w-3 text-destructive" />
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

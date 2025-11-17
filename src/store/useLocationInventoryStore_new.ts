@@ -13,10 +13,13 @@ export interface LocationInventorySummary {
 
 // Direct MV query functions (no caching)
 export const fetchLocationInventoryDirect = async (
-  warehouseCode: string,
+  _warehouseCode: string,
   location: string
 ): Promise<LocationInventorySummary> => {
   try {
+    if (!supabase) {
+      throw new Error('Supabase client not initialized');
+    }
     const { data, error } = await supabase
       .from('location_inventory_summary_mv')
       .select('*')
@@ -57,10 +60,13 @@ export const fetchLocationInventoryDirect = async (
 };
 
 export const fetchMultipleLocationsDirect = async (
-  warehouseCode: string,
+  _warehouseCode: string,
   locations: string[]
 ): Promise<Record<string, LocationInventorySummary>> => {
   try {
+    if (!supabase) {
+      throw new Error('Supabase client not initialized');
+    }
     const { data, error } = await supabase
       .from('location_inventory_summary_mv')
       .select('*')
@@ -104,7 +110,7 @@ interface LocationInventoryState {
   clearCache: () => void;
 }
 
-export const useLocationInventoryStore = create<LocationInventoryState>((set, get) => ({
+export const useLocationInventoryStore = create<LocationInventoryState>(() => ({
   inventoryCache: new Map(),
   loading: new Set(),
 
@@ -130,6 +136,6 @@ export const useLocationInventoryStore = create<LocationInventoryState>((set, ge
   },
 
   clearCache: () => {
-    set({ inventoryCache: new Map() });
+    // No-op since we're not caching anymore
   }
 }));

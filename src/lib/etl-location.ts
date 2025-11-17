@@ -34,7 +34,7 @@ export interface LocationInventorySummary {
  * Get inventory for a specific location from materialized view
  */
 export async function getLocationInventory(
-  warehouseCode: string,
+  _warehouseCode: string,
   location: string,
   itemType?: 'rack' | 'flat'
 ): Promise<LocationInventorySummary> {
@@ -100,7 +100,7 @@ export async function getLocationInventory(
  * Get inventory summary for multiple locations from materialized view
  */
 export async function getMultipleLocationsInventory(
-  warehouseCode: string,
+  _warehouseCode: string,
   locations: string[],
   itemType?: 'rack' | 'flat'
 ): Promise<Record<string, LocationInventorySummary>> {
