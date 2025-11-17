@@ -31,6 +31,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Search, Package, Filter, X, Settings, Plus, Trash2, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase/client';
 
 interface Material {
   id: string;
@@ -116,15 +117,14 @@ export default function MaterialsPage() {
   const fetchMajorCategories = async () => {
     setLoadingCategories(true);
     try {
-      const response = await fetch('/api/materials/categories/major');
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Failed to fetch categories:', response.status, errorText);
-        throw new Error(`Failed to fetch categories: ${response.status}`);
-      }
+      const { data, error } = await supabase
+        .from('major_categories')
+        .select('*')
+        .order('display_order');
 
-      const data = await response.json();
-      setMajorCategories(data.categories || []);
+      if (error) throw error;
+
+      setMajorCategories(data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
       // Set empty array so UI doesn't break
@@ -142,13 +142,14 @@ export default function MaterialsPage() {
   // Fetch all minor categories
   const fetchMinorCategories = async () => {
     try {
-      const response = await fetch('/api/materials/categories/minor');
-      if (!response.ok) {
-        throw new Error('Failed to fetch minor categories');
-      }
+      const { data, error } = await supabase
+        .from('minor_categories')
+        .select('*')
+        .order('display_order');
 
-      const data = await response.json();
-      setMinorCategories(data.categories || []);
+      if (error) throw error;
+
+      setMinorCategories(data || []);
     } catch (error) {
       console.error('Error fetching minor categories:', error);
       setMinorCategories([]);
@@ -164,21 +165,32 @@ export default function MaterialsPage() {
   const fetchMaterials = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        offset: offset.toString(),
-      });
-      
-      if (searchTerm) params.append('search', searchTerm);
-      if (filterMajorCategory) params.append('major_category', filterMajorCategory);
-      if (filterMinorCategory) params.append('minor_category', filterMinorCategory);
+      // Build query
+      let query = supabase.from('materials').select('*', { count: 'exact' });
 
-      const response = await fetch(`/api/materials?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch materials');
-      
-      const data: MaterialsResponse = await response.json();
-      setMaterials(data.data);
-      setTotal(data.total);
+      // Apply filters
+      if (filterMajorCategory) {
+        query = query.eq('major_category', filterMajorCategory);
+      }
+
+      if (filterMinorCategory) {
+        query = query.eq('minor_category_id', filterMinorCategory);
+      }
+
+      if (searchTerm) {
+        // Search in item_code or description
+        query = query.or(`item_code.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+      }
+
+      // Apply pagination and ordering
+      query = query.order('item_code', { ascending: true }).range(offset, offset + limit - 1);
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+
+      setMaterials(data || []);
+      setTotal(count || 0);
     } catch (error) {
       console.error('Error fetching materials:', error);
       toast({
@@ -221,17 +233,17 @@ export default function MaterialsPage() {
   ) => {
     setSavingItemCode(itemCode);
     try {
-      const response = await fetch(`/api/materials/${encodeURIComponent(itemCode)}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          [field]: value || null,
-        }),
-      });
+      const updateData = {
+        [field]: value || null,
+        updated_at: new Date().toISOString(),
+      };
 
-      if (!response.ok) throw new Error('Failed to update material');
+      const { error } = await supabase
+        .from('materials')
+        .update(updateData)
+        .eq('item_code', itemCode);
+
+      if (error) throw error;
 
       // Update local state
       setMaterials((prev) =>
@@ -270,21 +282,26 @@ export default function MaterialsPage() {
     }
 
     try {
-      const response = await fetch('/api/materials/categories/major', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Check if category already exists
+      const { data: existing } = await supabase
+        .from('major_categories')
+        .select('*')
+        .eq('name', newCategoryName.trim());
+
+      if (existing && existing.length > 0) {
+        throw new Error(`Category '${newCategoryName.trim()}' already exists`);
+      }
+
+      // Create category
+      const { error } = await supabase
+        .from('major_categories')
+        .insert({
           name: newCategoryName.trim(),
           description: newCategoryDescription.trim() || null,
-        }),
-      });
+          display_order: 0,
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create category');
-      }
+      if (error) throw error;
 
       toast({
         title: 'Success',
@@ -308,21 +325,30 @@ export default function MaterialsPage() {
     if (!editingCategory) return;
 
     try {
-      const response = await fetch(`/api/materials/categories/major/${editingCategory.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Check if new name conflicts with existing category
+      if (editCategoryName.trim() !== editingCategory.name) {
+        const { data: existing } = await supabase
+          .from('major_categories')
+          .select('*')
+          .eq('name', editCategoryName.trim())
+          .neq('id', editingCategory.id);
+
+        if (existing && existing.length > 0) {
+          throw new Error(`Category '${editCategoryName.trim()}' already exists`);
+        }
+      }
+
+      // Update category
+      const { error } = await supabase
+        .from('major_categories')
+        .update({
           name: editCategoryName.trim(),
           description: editCategoryDescription.trim() || null,
-        }),
-      });
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingCategory.id);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to update category');
-      }
+      if (error) throw error;
 
       toast({
         title: 'Success',
@@ -350,11 +376,19 @@ export default function MaterialsPage() {
     }
 
     try {
-      const response = await fetch(`/api/materials/categories/major/${category.id}`, {
-        method: 'DELETE',
-      });
+      // Update materials using this category to NULL
+      await supabase
+        .from('materials')
+        .update({ major_category: null })
+        .eq('major_category', category.name);
 
-      if (!response.ok) throw new Error('Failed to delete category');
+      // Delete category
+      const { error } = await supabase
+        .from('major_categories')
+        .delete()
+        .eq('id', category.id);
+
+      if (error) throw error;
 
       toast({
         title: 'Success',
@@ -398,22 +432,28 @@ export default function MaterialsPage() {
     }
 
     try {
-      const response = await fetch('/api/materials/categories/minor', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Check if minor category already exists for this major category
+      const { data: existing } = await supabase
+        .from('minor_categories')
+        .select('*')
+        .eq('name', name)
+        .eq('major_category_id', majorCategoryId);
+
+      if (existing && existing.length > 0) {
+        throw new Error(`Minor category '${name}' already exists for this major category`);
+      }
+
+      // Create minor category
+      const { error } = await supabase
+        .from('minor_categories')
+        .insert({
           name,
           major_category_id: majorCategoryId,
           description: newMinorCategoryDescription[majorCategoryId]?.trim() || null,
-        }),
-      });
+          display_order: 0,
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create minor category');
-      }
+      if (error) throw error;
 
       toast({
         title: 'Success',
@@ -447,21 +487,31 @@ export default function MaterialsPage() {
     if (!editingMinorCategory) return;
 
     try {
-      const response = await fetch(`/api/materials/categories/minor/${editingMinorCategory.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Check if new name conflicts with existing minor category
+      if (editMinorCategoryName.trim() !== editingMinorCategory.name) {
+        const { data: existing } = await supabase
+          .from('minor_categories')
+          .select('*')
+          .eq('name', editMinorCategoryName.trim())
+          .eq('major_category_id', editingMinorCategory.major_category_id)
+          .neq('id', editingMinorCategory.id);
+
+        if (existing && existing.length > 0) {
+          throw new Error(`Minor category '${editMinorCategoryName.trim()}' already exists for this major category`);
+        }
+      }
+
+      // Update minor category
+      const { error } = await supabase
+        .from('minor_categories')
+        .update({
           name: editMinorCategoryName.trim(),
           description: editMinorCategoryDescription.trim() || null,
-        }),
-      });
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingMinorCategory.id);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to update minor category');
-      }
+      if (error) throw error;
 
       toast({
         title: 'Success',
@@ -489,11 +539,19 @@ export default function MaterialsPage() {
     }
 
     try {
-      const response = await fetch(`/api/materials/categories/minor/${minorCategory.id}`, {
-        method: 'DELETE',
-      });
+      // Update materials using this minor category to NULL
+      await supabase
+        .from('materials')
+        .update({ minor_category_id: null })
+        .eq('minor_category_id', minorCategory.id);
 
-      if (!response.ok) throw new Error('Failed to delete minor category');
+      // Delete minor category
+      const { error } = await supabase
+        .from('minor_categories')
+        .delete()
+        .eq('id', minorCategory.id);
+
+      if (error) throw error;
 
       toast({
         title: 'Success',

@@ -162,11 +162,16 @@ export function DashboardPage() {
   const [stockDaysByLine, setStockDaysByLine] = useState<Map<string, any>>(new Map());
 
   useEffect(() => {
+    // Calculate actual BASE_URL used for API calls (same logic as insights.ts)
+    const actualBaseUrl = import.meta.env.VITE_ETL_BASE_URL 
+      || (import.meta.env.PROD ? '' : 'http://localhost:8787');
+
     // Log environment variables to console for debugging
     console.log('🔧 Environment Variables:', {
       VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
       VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+      VITE_ETL_BASE_URL: import.meta.env.VITE_ETL_BASE_URL,
+      '→ Actual API Base URL': actualBaseUrl, // This is what's actually used
       MODE: import.meta.env.MODE,
       DEV: import.meta.env.DEV,
       PROD: import.meta.env.PROD,
