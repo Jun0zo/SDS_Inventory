@@ -156,6 +156,8 @@ RETURNS INTEGER AS $$
 DECLARE
   capacity INTEGER;
   floor_array JSONB;
+  row_array JSONB;
+  cell_value JSONB;
 BEGIN
   -- Return default if input is null
   IF cell_capacity_json IS NULL THEN
@@ -163,7 +165,6 @@ BEGIN
   END IF;
 
   -- Convert 1-based indices to 0-based for array access
-  -- WMS: floor 1 = array index 0
   floor_idx := floor_idx - 1;
   col_idx := col_idx - 1;
 
@@ -174,12 +175,19 @@ BEGIN
 
   -- Extract floor array: cellCapacity[floor]
   floor_array := cell_capacity_json->floor_idx;
-  IF floor_array IS NULL THEN
+  IF floor_array IS NULL OR jsonb_typeof(floor_array) != 'array' THEN
     RETURN 1;
   END IF;
 
-  -- Extract capacity value: cellCapacity[floor][col]
-  capacity := (floor_array->col_idx)::INTEGER;
+  -- Support both 2D ([floor][col]) and 3D ([floor][row][col]) payloads
+  IF jsonb_typeof(floor_array->0) = 'array' THEN
+    row_array := floor_array->0;
+    cell_value := row_array->col_idx;
+  ELSE
+    cell_value := floor_array->col_idx;
+  END IF;
+
+  capacity := (cell_value)::INTEGER;
 
   -- Return capacity or default to 1
   RETURN COALESCE(capacity, 1);
@@ -191,7 +199,57 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 COMMENT ON FUNCTION get_cell_capacity_from_jsonb IS
-  'Extracts cell capacity from JSONB array cellCapacity[floor][col] using 1-based WMS indices. Returns 1 if not found.';
+  'Extracts cell capacity from JSONB array cellCapacity[floor][row][col] (row optional) using 1-based WMS indices. Returns 1 if not found.';
+
+-- Helper function: Get cell availability (blocked vs usable)
+CREATE OR REPLACE FUNCTION get_cell_availability_from_jsonb(
+  cell_availability_json JSONB,
+  floor_idx INTEGER,  -- 1-based from WMS
+  col_idx INTEGER     -- 1-based from WMS
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+  floor_array JSONB;
+  row_array JSONB;
+  cell_value JSONB;
+BEGIN
+  -- Null availability means everything is available
+  IF cell_availability_json IS NULL THEN
+    RETURN TRUE;
+  END IF;
+
+  floor_idx := floor_idx - 1;
+  col_idx := col_idx - 1;
+
+  IF floor_idx < 0 OR col_idx < 0 THEN
+    RETURN TRUE;
+  END IF;
+
+  floor_array := cell_availability_json->floor_idx;
+  IF floor_array IS NULL OR jsonb_typeof(floor_array) != 'array' THEN
+    RETURN TRUE;
+  END IF;
+
+  IF jsonb_typeof(floor_array->0) = 'array' THEN
+    row_array := floor_array->0;
+    cell_value := row_array->col_idx;
+  ELSE
+    cell_value := floor_array->col_idx;
+  END IF;
+
+  IF cell_value IS NULL THEN
+    RETURN TRUE;
+  END IF;
+
+  RETURN (cell_value)::BOOLEAN;
+
+EXCEPTION WHEN OTHERS THEN
+  RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+COMMENT ON FUNCTION get_cell_availability_from_jsonb IS
+  'Extracts cell availability from JSONB array cellAvailability[floor][row][col]; defaults to TRUE when missing.';
 
 -- Zone Capacities Materialized View
 -- Purpose: Pre-calculate zone capacities and current stock for fast dashboard queries
@@ -656,40 +714,50 @@ WITH rack_capacity_aware_count AS (
     i.id AS item_id,
     w.cell_no,
     COUNT(*) AS row_count,
-    -- Get capacity for this cell location
     CASE
-      WHEN i.type = 'rack' THEN
+      WHEN i.type = 'rack' AND cell_loc.floor_idx IS NOT NULL THEN
         get_cell_capacity_from_jsonb(
           i.cell_capacity,
-          (parse_rack_cell_location(w.cell_no)).floor_idx,
-          (parse_rack_cell_location(w.cell_no)).col_idx
+          cell_loc.floor_idx,
+          cell_loc.col_idx
         )
       ELSE NULL
     END AS cell_capacity,
-    -- Apply capacity-aware counting logic
     CASE
       WHEN i.type = 'rack' THEN
         CASE
+          WHEN cell_loc.floor_idx IS NULL OR cell_loc.col_idx IS NULL THEN 0
+          WHEN NOT get_cell_availability_from_jsonb(
+            i.cell_availability,
+            cell_loc.floor_idx,
+            cell_loc.col_idx
+          ) THEN 0
           WHEN get_cell_capacity_from_jsonb(
             i.cell_capacity,
-            (parse_rack_cell_location(w.cell_no)).floor_idx,
-            (parse_rack_cell_location(w.cell_no)).col_idx
-          ) = 1 THEN 1  -- Capacity = 1: count as 1
-          ELSE COUNT(*)  -- Capacity >= 2: count all rows
+            cell_loc.floor_idx,
+            cell_loc.col_idx
+          ) <= 0 THEN 0
+          WHEN get_cell_capacity_from_jsonb(
+            i.cell_capacity,
+            cell_loc.floor_idx,
+            cell_loc.col_idx
+          ) = 1 THEN 1
+          ELSE COUNT(*)
         END
-      ELSE COUNT(*)  -- Flat items: count all rows
+      ELSE COUNT(*)
     END AS capacity_aware_count
   FROM public.items i
   JOIN public.warehouses wh ON i.warehouse_id = wh.id
   JOIN public.wms_raw_rows w ON
-    normalize_zone_code(w.split_key) = normalize_zone_code(i.location)
+    normalize_zone_code(w.split_key) = normalize_zone_code(i.zone)
     AND (
       (i.type = 'flat' AND UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i.location)))
       OR
       (i.type = 'rack' AND UPPER(TRIM(w.cell_no)) ~ ('^' || UPPER(TRIM(i.location)) || '-[0-9]+-[0-9]+$'))
     )
+  LEFT JOIN LATERAL parse_rack_cell_location(w.cell_no) AS cell_loc(rack_code, floor_idx, col_idx) ON TRUE
   WHERE wh.code IS NOT NULL
-  GROUP BY i.id, i.type, i.cell_capacity, w.cell_no
+  GROUP BY i.id, i.type, i.cell_capacity, i.cell_availability, w.cell_no, cell_loc.floor_idx, cell_loc.col_idx
 ),
 item_lot_distribution AS (
   -- Pre-aggregate lot distribution per item to avoid nested aggregation

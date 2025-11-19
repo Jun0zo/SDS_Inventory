@@ -4,6 +4,9 @@ import { Warehouse, ProductionLine } from '@/types/warehouse';
 import { ProductionLineManagement } from './production-line-management';
 import { toast } from '@/hooks/use-toast';
 
+const BASE_URL = import.meta.env.VITE_ETL_BASE_URL
+  || (import.meta.env.PROD ? '' : 'http://localhost:8787');
+
 interface ProductionLineManagementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -27,7 +30,7 @@ export function ProductionLineManagementDialog({
     if (!warehouse) return;
 
     try {
-      const response = await fetch(`/api/production-lines/${warehouse.id}`);
+      const response = await fetch(`${BASE_URL}/api/production-lines/${warehouse.id}`);
       if (!response.ok) {
         throw new Error('Failed to load production lines');
       }
@@ -44,7 +47,7 @@ export function ProductionLineManagementDialog({
 
   const handleAddLine = async (line: Omit<ProductionLine, 'id' | 'created_at' | 'updated_at'>) => {
     try {
-      const response = await fetch('/api/production-lines', {
+      const response = await fetch(`${BASE_URL}/api/production-lines`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,7 +78,7 @@ export function ProductionLineManagementDialog({
     line: Omit<ProductionLine, 'id' | 'created_at' | 'updated_at'>
   ) => {
     try {
-      const response = await fetch(`/api/production-lines/${id}`, {
+      const response = await fetch(`${BASE_URL}/api/production-lines/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -103,7 +106,7 @@ export function ProductionLineManagementDialog({
 
   const handleDeleteLine = async (id: string) => {
     try {
-      const response = await fetch(`/api/production-lines/${id}`, {
+      const response = await fetch(`${BASE_URL}/api/production-lines/${id}`, {
         method: 'DELETE',
       });
 
