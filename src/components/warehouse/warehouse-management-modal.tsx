@@ -34,6 +34,9 @@ import {
 import { Edit2, Trash2, Plus, Building2, Factory } from 'lucide-react';
 import { ProductionLineManagementDialog } from './production-line-management-dialog';
 
+const BASE_URL = import.meta.env.VITE_ETL_BASE_URL
+  || (import.meta.env.PROD ? '' : 'http://localhost:8787');
+
 interface WarehouseManagementModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -89,7 +92,7 @@ export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManage
       await Promise.all(
         warehouses.map(async (warehouse) => {
           try {
-            const response = await fetch(`/api/production-lines/${warehouse.id}`);
+            const response = await fetch(`${BASE_URL}/api/production-lines/${warehouse.id}`);
             if (response.ok) {
               const data = await response.json();
               counts[warehouse.id] = data.production_lines?.length || 0;

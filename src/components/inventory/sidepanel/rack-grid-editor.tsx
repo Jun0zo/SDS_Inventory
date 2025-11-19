@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { RackItem } from '@/types/inventory';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { RefreshCw, X } from 'lucide-react';
 import {
   mapInventoryToCells,
@@ -11,6 +12,7 @@ import {
   formatOccupancy,
   formatUldCount,
   getCellTooltip,
+  parseCellLocation,
   InventoryItem,
 } from '@/lib/cell-inventory-mapper';
 
@@ -167,7 +169,28 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
       (sum, row) => sum + row.reduce((rowSum, cap) => rowSum + cap, 0),
       0
     ) || 0;
-    return { totalCapacity };
+
+    // Calculate current stock for this floor
+    let floorCurrentStock = 0;
+    if (cellAvailability[floor]) {
+      for (let row = 0; row < item.rows; row++) {
+        for (let col = 0; col < item.cols; col++) {
+          if (cellAvailability[floor][row]?.[col]) {
+            const capacity = cellCapacity[floor]?.[row]?.[col] ?? 1;
+            const occupancy = calculateCellOccupancy(
+              floor,
+              row,
+              col,
+              cellInventoryMap,
+              capacity
+            );
+            floorCurrentStock += occupancy.currentCount;
+          }
+        }
+      }
+    }
+
+    return { totalCapacity, currentStock: floorCurrentStock };
   };
 
   const getTotalMaxCapacity = () => {
@@ -177,6 +200,44 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
       total += totalCapacity;
     }
     return total;
+  };
+
+  // Get items that are not assigned to any floor in the rack
+  const getUnassignedItems = () => {
+    if (!inventory?.items) return [];
+
+    const rackLocationBase = item.location.toUpperCase();
+
+    return inventory.items.filter(invItem => {
+      if (!invItem.cell_no) return false;
+
+      const cellNo = invItem.cell_no.toUpperCase();
+      if (!cellNo.startsWith(`${rackLocationBase}-`)) {
+        return false; // 다른 랙은 제외
+      }
+
+      const location = parseCellLocation(cellNo);
+      if (!location) {
+        return true; // 셀 좌표를 파싱할 수 없으면 미할당 처리
+      }
+
+      const isCellAvailable =
+        !!cellAvailability[location.floor]?.[location.row]?.[location.col];
+      if (!isCellAvailable) {
+        return true;
+      }
+
+      const key = `${location.floor}-${location.row}-${location.col}`;
+      const mappedItems = cellInventoryMap.get(key) || [];
+      const alreadyMapped = mappedItems.some((mapped: InventoryItem) =>
+        mapped.id === invItem.id ||
+        (mapped.item_code === invItem.item_code &&
+         mapped.cell_no === invItem.cell_no &&
+         mapped.lot_key === invItem.lot_key)
+      );
+
+      return !alreadyMapped;
+    });
   };
 
   // Calculate pillar positions (shared between view and edit mode)
@@ -238,7 +299,7 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
             <div className="relative z-10 space-y-1">
               {Array.from({ length: item.floors }, (_, floorIdx) => {
                 const floor = item.floors - 1 - floorIdx;
-                const { totalCapacity } = getFloorStats(floor);
+                const { totalCapacity, currentStock } = getFloorStats(floor);
 
                 return (
                   <div key={floor} className="space-y-1">
@@ -247,7 +308,8 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
                       <span className="font-medium">Floor {floor + 1}</span>
                       <div className="flex gap-3 text-muted-foreground">
                         <span>Columns: {item.cols}</span>
-                        <span className="font-medium">Max Capacity: {totalCapacity}</span>
+                        <span>Current: <span className="font-medium text-green-600">{currentStock}</span></span>
+                        <span>Max: <span className="font-medium">{totalCapacity}</span></span>
                       </div>
                     </div>
 
@@ -370,6 +432,38 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
           <div className="h-2 bg-slate-800 rounded-sm mt-2" />
           <div className="text-center text-xs text-muted-foreground">Ground</div>
           </div>
+
+          {/* Unassigned items section */}
+          {(() => {
+            const unassignedItems = getUnassignedItems();
+            if (unassignedItems.length === 0) return null;
+
+            return (
+              <div className="mt-6 space-y-3">
+                <div className="text-sm font-medium text-amber-600 bg-amber-50 px-3 py-2 rounded border border-amber-200">
+                  ⚠️ Items in rack but not assigned to any floor ({unassignedItems.length} items)
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {unassignedItems.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{item.item_code}</span>
+                        <span className="text-muted-foreground">at {item.cell_no}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          Qty: {item.available_qty}
+                        </Badge>
+                        {item.lot_key && (
+                          <span className="text-muted-foreground">Lot: {item.lot_key}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Cell Detail Panel */}
           {selectedCell && (

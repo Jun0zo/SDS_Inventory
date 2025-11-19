@@ -21,28 +21,37 @@ WITH rack_capacity_aware_count AS (
     i.id AS item_id,
     w.cell_no,
     COUNT(*) AS row_count,
-    -- Get capacity for this cell location
     CASE
-      WHEN i.type = 'rack' THEN
+      WHEN i.type = 'rack' AND cell_loc.floor_idx IS NOT NULL THEN
         get_cell_capacity_from_jsonb(
           i.cell_capacity,
-          (parse_rack_cell_location(w.cell_no)).floor_idx,
-          (parse_rack_cell_location(w.cell_no)).col_idx
+          cell_loc.floor_idx,
+          cell_loc.col_idx
         )
       ELSE NULL
     END AS cell_capacity,
-    -- Apply capacity-aware counting logic
     CASE
       WHEN i.type = 'rack' THEN
         CASE
+          WHEN cell_loc.floor_idx IS NULL OR cell_loc.col_idx IS NULL THEN 0
+          WHEN NOT get_cell_availability_from_jsonb(
+            i.cell_availability,
+            cell_loc.floor_idx,
+            cell_loc.col_idx
+          ) THEN 0
           WHEN get_cell_capacity_from_jsonb(
             i.cell_capacity,
-            (parse_rack_cell_location(w.cell_no)).floor_idx,
-            (parse_rack_cell_location(w.cell_no)).col_idx
-          ) = 1 THEN 1  -- Capacity = 1: count as 1
-          ELSE COUNT(*)  -- Capacity >= 2: count all rows
+            cell_loc.floor_idx,
+            cell_loc.col_idx
+          ) <= 0 THEN 0
+          WHEN get_cell_capacity_from_jsonb(
+            i.cell_capacity,
+            cell_loc.floor_idx,
+            cell_loc.col_idx
+          ) = 1 THEN 1
+          ELSE COUNT(*)
         END
-      ELSE COUNT(*)  -- Flat items: count all rows
+      ELSE COUNT(*)
     END AS capacity_aware_count
   FROM public.items i
   JOIN public.warehouses wh ON i.warehouse_id = wh.id
@@ -53,8 +62,9 @@ WITH rack_capacity_aware_count AS (
       OR
       (i.type = 'rack' AND UPPER(TRIM(w.cell_no)) ~ ('^' || UPPER(TRIM(i.location)) || '-[0-9]+-[0-9]+$'))
     )
+  LEFT JOIN LATERAL parse_rack_cell_location(w.cell_no) AS cell_loc(rack_code, floor_idx, col_idx) ON TRUE
   WHERE wh.code IS NOT NULL
-  GROUP BY i.id, i.type, i.cell_capacity, w.cell_no
+  GROUP BY i.id, i.type, i.cell_capacity, i.cell_availability, w.cell_no, cell_loc.floor_idx, cell_loc.col_idx
 ),
 item_lot_distribution AS (
   -- Pre-aggregate lot distribution per item to avoid nested aggregation

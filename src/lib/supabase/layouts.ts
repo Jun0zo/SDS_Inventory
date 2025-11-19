@@ -340,19 +340,15 @@ export async function createOrUpdateLayout(params: {
     }
   }
 
-  // Refresh only location-related materialized views after layout changes
-  // This is much faster than refreshing all MVs
+  // Refresh all materialized views after layout changes for complete data consistency
   try {
-    const { refreshMaterializedView } = await import('./materialized-views');
-    
-    // Only refresh location_inventory_summary_mv for fast updates
-    // This MV is the most critical for layout changes and location inventory display
-    const result = await refreshMaterializedView('location_inventory_summary_mv');
-    
-    if (result.status === 'error') {
-      console.warn('Failed to refresh location_inventory_summary_mv:', result.error);
+    const { refreshAllMaterializedViews } = await import('./materialized-views');
+    const result = await refreshAllMaterializedViews();
+
+    if (result) {
+      console.log('All materialized views refreshed after layout change');
     } else {
-      console.log(`Refreshed location_inventory_summary_mv in ${result.duration_seconds?.toFixed(2)}s`);
+      console.warn('Failed to refresh all materialized views');
     }
   } catch (error) {
     console.warn('Could not refresh materialized views after layout change:', error);
