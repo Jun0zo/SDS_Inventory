@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Treemap, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 
-import { Package, Clock, Building2, AlertCircle, BarChart3, Database, AlertTriangle, ShoppingCart, Timer, LayoutGrid, List, Factory } from 'lucide-react';
+import { Package, Clock, Building2, AlertCircle, BarChart3, Database, AlertTriangle, ShoppingCart, Timer, LayoutGrid, List, Factory, Link2 } from 'lucide-react';
 import { ActivityLog } from '@/types/inventory';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -372,13 +372,24 @@ export function DashboardPage() {
     const urgentStockCount = materials.filter(item => item.stockDays <= 1 && item.stockDays > 0).length; // 1일 이하 (0일 제외)
     const warningStockCount = materials.filter(item => item.stockDays <= 3 && item.stockDays > 1).length; // 3일 이하 (1일 초과)
 
+    // Find lowest stock material
+    const lowestStockMaterial = materials.reduce((min, item) =>
+      item.stockDays < min.stockDays ? item : min
+    );
+
     const summary = {
       avgStockDays: Math.round(avgStockDays * 10) / 10,
       criticalStockCount, // 0일 이하
       urgentStockCount,   // 1일 이하
       warningStockCount,  // 3일 이하
       totalMaterials,
-      productionLinesCount: productionLines.length
+      productionLinesCount: productionLines.length,
+      lowestStockMaterial: {
+        materialCode: lowestStockMaterial.materialCode,
+        stockDays: lowestStockMaterial.stockDays,
+        hasCompatibles: lowestStockMaterial.hasCompatibles,
+        compatibleMaterials: lowestStockMaterial.compatibleMaterials
+      }
     };
 
     console.log('✅ Stock days summary calculated:', summary);
@@ -759,6 +770,37 @@ export function DashboardPage() {
                           <p className="text-xs text-muted-foreground">평균 재고 일수</p>
                         </div>
 
+                        {/* Lowest Stock Material */}
+                        {stockDaysSummary?.lowestStockMaterial && (
+                          <div className="text-center p-3 border rounded-lg bg-muted/50">
+                            <div className="text-xs text-muted-foreground mb-1">가장 낮은 재고</div>
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-sm font-mono font-medium">
+                                {stockDaysSummary.lowestStockMaterial.materialCode}
+                              </span>
+                              {stockDaysSummary.lowestStockMaterial.hasCompatibles && (
+                                <Badge variant="secondary" className="text-xs h-5">
+                                  <Link2 className="h-3 w-3 mr-1" />
+                                  호환 {stockDaysSummary.lowestStockMaterial.compatibleMaterials?.length}
+                                </Badge>
+                              )}
+                              <span className={`text-lg font-bold ${getStockStatusColor(stockDaysSummary.lowestStockMaterial.stockDays)}`}>
+                                {stockDaysSummary.lowestStockMaterial.stockDays.toFixed(1)}일
+                              </span>
+                            </div>
+                            {stockDaysSummary.lowestStockMaterial.hasCompatibles && (
+                              <div className="mt-2 text-xs text-muted-foreground">
+                                {stockDaysSummary.lowestStockMaterial.compatibleMaterials?.map((comp, idx) => (
+                                  <span key={comp.materialCode}>
+                                    {comp.materialCode} ({comp.stock}개)
+                                    {idx < (stockDaysSummary.lowestStockMaterial.compatibleMaterials?.length || 0) - 1 ? ', ' : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Stock Status Breakdown */}
                         <div className="grid grid-cols-3 gap-2">
                           <div className="text-center p-3 border rounded-lg border-rose-200">
@@ -782,11 +824,20 @@ export function DashboardPage() {
                         </div>
                         {Array.from(stockDaysByLine.entries()).map(([lineId, lineData]) => (
                           <div key={lineId} className="flex justify-between items-center p-3 border rounded">
-                            <div>
+                            <div className="flex-1">
                               <div className="text-sm font-medium">{lineData.lineName}</div>
                               <div className="text-xs text-muted-foreground">
                                 {lineData.totalMaterials}개 자재
                               </div>
+                              {lineData.lowestStockMaterial && (
+                                <div className="text-xs mt-1 flex items-center gap-1">
+                                  <span className="text-muted-foreground">최저:</span>
+                                  <span className="font-mono font-medium">{lineData.lowestStockMaterial.materialCode}</span>
+                                  <span className={`font-semibold ${getStockStatusColor(lineData.lowestStockMaterial.stockDays)}`}>
+                                    ({lineData.lowestStockMaterial.stockDays.toFixed(1)}일)
+                                  </span>
+                                </div>
+                              )}
                             </div>
                             <div className="text-right">
                               <div className={`text-lg font-bold ${getStockStatusColor(lineData.avgStockDays)}`}>

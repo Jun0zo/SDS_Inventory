@@ -4,23 +4,28 @@ import { cn } from '@/lib/cn';
 import { applyRotationWH } from '@/lib/geometry';
 import { LocationInventorySummary } from '@/store/useLocationInventoryStore';
 import { calculateCapacity, calculateUtilization, getUtilizationColor } from '@/lib/capacity';
-import { Package, RefreshCw } from 'lucide-react';
+import { Package, RefreshCw, AlertTriangle, Factory } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useDraggable } from '@dnd-kit/core';
+import { Badge } from '@/components/ui/badge';
 
 interface ItemViewProps {
   item: AnyItem;
   onSelect: () => void;
   inventory?: LocationInventorySummary | null;
+  isDimmed?: boolean;
 }
 
 interface InventoryWithLoading extends LocationInventorySummary {
   loading?: boolean;
 }
 
-export function ItemView({ item, onSelect, inventory }: ItemViewProps) {
-  const { grid, selectedIds, isEditMode, updateItem } = useZoneStore();
+export function ItemView({ item, onSelect, inventory, isDimmed = false }: ItemViewProps) {
+  const { grid, selectedIds, isEditMode, updateItem, componentsMetadata } = useZoneStore();
   const isSelected = selectedIds.includes(item.id);
+
+  // Find metadata for this item
+  const itemMetadata = componentsMetadata.find(m => m.item_id === item.id);
 
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, w: 0, h: 0 });
@@ -175,7 +180,10 @@ export function ItemView({ item, onSelect, inventory }: ItemViewProps) {
       }}
     >
       <div
-        className="h-full w-full rounded-lg border-2 bg-card p-2 shadow-md hover:shadow-lg transition-all"
+        className={cn(
+          "h-full w-full rounded-lg border-2 bg-card p-2 shadow-md hover:shadow-lg transition-all",
+          isDimmed && "opacity-30"
+        )}
         style={{
           borderColor: capacity > 0 ? utilizationColor : undefined,
         }}
@@ -193,6 +201,34 @@ export function ItemView({ item, onSelect, inventory }: ItemViewProps) {
               )}
               {capacity > 0 && !isLoading && (
                 <Package className="h-3 w-3" style={{ color: utilizationColor }} />
+              )}
+              {/* Material Variance Indicator */}
+              {itemMetadata?.has_material_variance && (
+                <AlertTriangle
+                  className="h-3 w-3 text-red-600"
+                  title="Material mismatch detected"
+                />
+              )}
+              {/* Unassigned Locations Indicator */}
+              {itemMetadata?.has_unassigned_locations && (
+                <Badge
+                  variant="secondary"
+                  className="h-4 px-1 text-[9px] bg-orange-100 text-orange-700"
+                  title={`${itemMetadata.unassigned_locations_count} unassigned locations`}
+                >
+                  {itemMetadata.unassigned_locations_count}
+                </Badge>
+              )}
+              {/* Production Line Indicator */}
+              {itemMetadata?.production_line_count && itemMetadata.production_line_count > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="h-4 px-1 text-[9px] bg-blue-100 text-blue-700 flex items-center gap-0.5"
+                  title={`Feeds ${itemMetadata.production_line_count} production line${itemMetadata.production_line_count > 1 ? 's' : ''}`}
+                >
+                  <Factory className="h-2.5 w-2.5" />
+                  {itemMetadata.production_line_count}
+                </Badge>
               )}
             </div>
           </div>

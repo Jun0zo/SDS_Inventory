@@ -9,6 +9,9 @@ import {
 } from '@/lib/supabase/layouts';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { refreshLayoutMaterializedViews } from '@/lib/supabase/materialized-views';
+import type { ComponentFilters, ComponentMetadataSummary } from '@/types/component-metadata';
+import { getZoneComponentsMetadata } from '@/lib/supabase/component-metadata';
 
 interface ZoneState {
   // Current zone
@@ -46,11 +49,17 @@ interface ZoneState {
   // Pan callback for moving view to new items
   panToPositionCallback?: ((x: number, y: number, width: number, height: number) => void) | null;
 
+  // Component metadata and filters
+  filters: ComponentFilters;
+  componentsMetadata: ComponentMetadataSummary[];
+  loadingMetadata: boolean;
+
   // Actions - Zone management
   setCurrentZone: (zone: string, warehouseId: string, warehouseCode: string) => void;
   
   // Actions - CRUD
   addItem: (item: AnyItem, findEmptySpace?: (width: number, height: number) => { x: number; y: number; foundInViewport: boolean }) => void;
+  addItemFromUnassigned: (cellNo: string) => void;
   updateItem: (id: string, updates: Partial<AnyItem>) => void;
   removeItem: (id: string) => void;
   setItems: (items: AnyItem[]) => void;
@@ -86,6 +95,11 @@ interface ZoneState {
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
+
+  // Actions - Filters and Metadata
+  setFilters: (filters: ComponentFilters) => void;
+  loadComponentsMetadata: () => Promise<void>;
+  isItemHighlighted: (itemId: string) => boolean;
 }
 
 const DEFAULT_GRID: GridConfig = {
@@ -122,6 +136,13 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
   dataVersion: 0,
   findEmptySpaceCallback: null,
   panToPositionCallback: null,
+  filters: {
+    showOnlyWithUnassigned: false,
+    showOnlyWithVariance: false,
+    showOnlyWithProductionLines: false,
+  },
+  componentsMetadata: [],
+  loadingMetadata: false,
 
   setCurrentZone: async (zone, warehouseId, warehouseCode) => {
     console.log('🔄 [setCurrentZone] Setting zone:', { zone, warehouseId, warehouseCode });
@@ -224,6 +245,37 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
 
     // Return info about panning if needed
     return { item: itemToAdd, shouldPanToItem };
+  },
+
+  addItemFromUnassigned: (cellNo) => {
+    const state = get();
+
+    // Generate a unique ID for the new item
+    const id = `item-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+
+    // Create a new flat storage item
+    const newItem: AnyItem = {
+      id,
+      type: 'flat',
+      location: cellNo,
+      zone: state.currentZone,
+      x: 0,
+      y: 0,
+      w: 4,  // Default width: 4 grid cells
+      h: 4,  // Default height: 4 grid cells
+      rows: 1,  // Default: 1 row for flat storage
+      cols: 1,  // Default: 1 col for flat storage
+      rotation: 0,
+    };
+
+    // Add the item using the existing addItem function
+    // This will automatically find empty space and handle validation
+    get().addItem(newItem);
+
+    toast({
+      title: '위치 추가됨',
+      description: `${cellNo} 위치가 레이아웃에 추가되었습니다.`,
+    });
   },
 
   updateItem: (id, updates) => {
@@ -596,6 +648,15 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
         // Reload layout from DB to get updated cellCapacity and other computed fields
         await get().loadLayout();
 
+        // Refresh materialized views to update inventory data
+        try {
+          await refreshLayoutMaterializedViews();
+          console.log('Materialized views refreshed successfully');
+        } catch (mvError) {
+          console.error('Failed to refresh materialized views:', mvError);
+          // Don't fail the whole save if MV refresh fails
+        }
+
         toast({
           title: 'Layout saved',
           description: `Layout saved for ${state.currentWarehouseId}/${state.currentZone} • ${now.toLocaleTimeString()}`,
@@ -782,5 +843,76 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
 
   setPanToPositionCallback: (callback) => {
     set({ panToPositionCallback: callback });
+  },
+
+  // Filters and Metadata
+  setFilters: (filters) => {
+    set({ filters });
+  },
+
+  loadComponentsMetadata: async () => {
+    const state = get();
+    const { currentWarehouseId, currentZone } = state;
+
+    if (!currentWarehouseId || !currentZone) {
+      console.warn('Cannot load metadata: warehouse or zone not set');
+      return;
+    }
+
+    set({ loadingMetadata: true });
+
+    try {
+      const metadata = await getZoneComponentsMetadata(currentWarehouseId, currentZone);
+      set({ componentsMetadata: metadata, loadingMetadata: false });
+    } catch (error) {
+      console.error('Failed to load components metadata:', error);
+      set({ loadingMetadata: false });
+    }
+  },
+
+  isItemHighlighted: (itemId: string) => {
+    const state = get();
+    const { filters, componentsMetadata } = state;
+
+    // If no filters active, all items are highlighted (normal state)
+    if (
+      !filters.showOnlyWithUnassigned &&
+      !filters.showOnlyWithVariance &&
+      !filters.showOnlyWithProductionLines
+    ) {
+      return true;
+    }
+
+    // Find metadata for this item
+    const metadata = componentsMetadata.find((m) => m.item_id === itemId);
+    if (!metadata) {
+      return false; // Dim items without metadata when filters are active
+    }
+
+    // Check if item matches active filters
+    let matches = true;
+
+    // Check unassigned filter
+    if (filters.showOnlyWithUnassigned) {
+      if (!metadata.has_unassigned_locations) {
+        matches = false;
+      }
+    }
+
+    // Check variance filter
+    if (filters.showOnlyWithVariance) {
+      if (!metadata.has_material_variance) {
+        matches = false;
+      }
+    }
+
+    // Check production line filter
+    if (filters.showOnlyWithProductionLines) {
+      if (!metadata.production_line_count || metadata.production_line_count === 0) {
+        matches = false;
+      }
+    }
+
+    return matches;
   },
 }));

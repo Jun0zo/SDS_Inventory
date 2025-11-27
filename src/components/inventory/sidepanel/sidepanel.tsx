@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { RackForm } from './rack-form';
 import { FlatForm } from './flat-form';
 import { RackGridEditor } from './rack-grid-editor';
+import { SidePanelMetadata } from './sidepanel-metadata';
 import { calculateCapacity, calculateUtilization, getUtilizationColor, getUtilizationStatus } from '@/lib/capacity';
 import { Package2, Package, Box, Eye } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
@@ -19,7 +20,7 @@ import { LocationInventoryItem } from '@/lib/etl-location';
 import { fetchLocationInventoryDirect } from '@/store/useLocationInventoryStore';
 
 export function SidePanel() {
-  const { items, selectedIds, isEditMode, dataVersion, updateItem } = useZoneStore();
+  const { items, selectedIds, isEditMode, dataVersion, updateItem, currentWarehouseId } = useZoneStore();
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [rackGridViewOpen, setRackGridViewOpen] = useState(false);
@@ -360,19 +361,20 @@ export function SidePanel() {
   if (!isEditMode) {
     return (
       <>
-        <Card className="w-80 flex flex-col h-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Box className="h-5 w-5" />
-              {selectedItem.location}
-            </CardTitle>
-            <CardDescription className="capitalize">
-              {selectedItem.type} • Zone {selectedItem.zone}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
-            <ScrollArea className="flex-1">
-              <div className="space-y-4 p-6">
+        <ScrollArea className="h-full w-80">
+          <div className="space-y-4">
+            <Card className="w-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Box className="h-5 w-5" />
+                  {selectedItem.location}
+                </CardTitle>
+                <CardDescription className="capitalize">
+                  {selectedItem.type} • Zone {selectedItem.zone}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
                 {/* Rack/Flat Configuration */}
                 {selectedItem.type === 'rack' && (
                   <div className="space-y-2 pb-2 border-b">
@@ -510,38 +512,48 @@ export function SidePanel() {
                 </div>
               </div>
             )}
-              </div>
-            </ScrollArea>
-            
-            {/* Rack Grid View Button (for rack items) */}
-            {selectedItem.type === 'rack' && (
-              <div className="p-6 pt-0 pb-3">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setRackGridViewOpen(true)}
-                >
-                  <Eye className="mr-2 h-4 w-4" />
-                  View Rack Grid
-                </Button>
-              </div>
-            )}
+                </div>
 
-            {/* Toggle Item List Button */}
-            {inventory && inventory.items && inventory.items.length > 0 && (
-              <div className={`p-6 ${selectedItem.type === 'rack' ? 'pt-0' : 'pt-0'}`}>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setItemModalOpen(true)}
-                >
-                  <Package className="mr-2 h-4 w-4" />
-                  Show All Items
-                </Button>
-              </div>
+                {/* Rack Grid View Button (for rack items) */}
+                {selectedItem.type === 'rack' && (
+                  <div className="pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setRackGridViewOpen(true)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      View Rack Grid
+                    </Button>
+                  </div>
+                )}
+
+                {/* Toggle Item List Button */}
+                {inventory && inventory.items && inventory.items.length > 0 && (
+                  <div className={`${selectedItem.type === 'rack' ? 'pt-2' : 'pt-4 border-t'}`}>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setItemModalOpen(true)}
+                    >
+                      <Package className="mr-2 h-4 w-4" />
+                      Show All Items
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Component Metadata in View Mode */}
+            {currentWarehouseId && (
+              <SidePanelMetadata
+                itemId={selectedItem.id}
+                warehouseId={currentWarehouseId}
+                isEditMode={false}
+              />
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </ScrollArea>
 
         {/* Items Modal */}
         <Dialog open={itemModalOpen} onOpenChange={setItemModalOpen}>
@@ -624,25 +636,32 @@ export function SidePanel() {
   if (isEditMode && selectedItem) {
     return (
       <>
-        <Card className="w-80 flex flex-col h-full">
-          <CardHeader>
-            <CardTitle>Inspector</CardTitle>
-            <CardDescription className="capitalize">
-              {selectedItem.type} - {selectedItem.location}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-hidden p-0">
-            <ScrollArea className="h-full">
-              <div className="p-6">
-                {selectedItem.type === 'rack' ? (
-                  <RackForm item={selectedItem} />
-                ) : (
-                  <FlatForm item={selectedItem} />
-                )}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card className="w-80">
+            <CardHeader>
+              <CardTitle>Inspector</CardTitle>
+              <CardDescription className="capitalize">
+                {selectedItem.type} - {selectedItem.location}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {selectedItem.type === 'rack' ? (
+                <RackForm item={selectedItem} />
+              ) : (
+                <FlatForm item={selectedItem} />
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Component Metadata */}
+          {currentWarehouseId && (
+            <SidePanelMetadata
+              itemId={selectedItem.id}
+              warehouseId={currentWarehouseId}
+              isEditMode={isEditMode}
+            />
+          )}
+        </div>
 
         {/* Items Modal */}
         <Dialog open={itemModalOpen} onOpenChange={setItemModalOpen}>

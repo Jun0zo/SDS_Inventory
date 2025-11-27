@@ -381,13 +381,21 @@ async def create_production_line(data: Dict[str, Any]) -> Dict[str, Any]:
     if materials:
         materials_data = []
         for material in materials:
-            materials_data.append({
+            material_data = {
                 'production_line_id': line_id,
                 'material_code': material['material_code'],
                 'material_name': material['material_name'],
                 'quantity_per_unit': material['quantity_per_unit'],
                 'unit': material['unit']
-            })
+            }
+            # Add optional compatibility fields
+            if 'material_group_id' in material:
+                material_data['material_group_id'] = material['material_group_id']
+            if 'is_primary' in material:
+                material_data['is_primary'] = material['is_primary']
+            if 'priority_in_group' in material:
+                material_data['priority_in_group'] = material['priority_in_group']
+            materials_data.append(material_data)
 
         materials_result = supabase.table('production_line_materials').insert(materials_data).execute()
 
@@ -423,13 +431,21 @@ async def update_production_line(line_id: str, data: Dict[str, Any]) -> Dict[str
         if materials:
             materials_data = []
             for material in materials:
-                materials_data.append({
+                material_data = {
                     'production_line_id': line_id,
                     'material_code': material['material_code'],
                     'material_name': material['material_name'],
                     'quantity_per_unit': material['quantity_per_unit'],
                     'unit': material['unit']
-                })
+                }
+                # Add optional compatibility fields
+                if 'material_group_id' in material:
+                    material_data['material_group_id'] = material['material_group_id']
+                if 'is_primary' in material:
+                    material_data['is_primary'] = material['is_primary']
+                if 'priority_in_group' in material:
+                    material_data['priority_in_group'] = material['priority_in_group']
+                materials_data.append(material_data)
 
             materials_result = supabase.table('production_line_materials').insert(materials_data).execute()
             line['materials'] = materials_result.data if materials_result.data else []
