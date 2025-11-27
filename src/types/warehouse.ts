@@ -16,6 +16,10 @@ export type ProductionLineMaterial = {
   material_name: string;
   quantity_per_unit: number; // 제품 1개 생산에 필요한 자재 수량
   unit: string; // 단위 (예: EA, KG, L 등)
+  // Material compatibility fields
+  material_group_id?: string; // UUID linking compatible materials (1:1 interchangeable)
+  is_primary?: boolean; // Primary material in compatibility group
+  priority_in_group?: number; // Priority order within group (lower = higher priority)
 };
 
 // Production Line

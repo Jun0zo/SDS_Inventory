@@ -6,6 +6,8 @@ import { Toolbox } from '@/components/inventory/toolbox/toolbox';
 import { SidePanel } from '@/components/inventory/sidepanel/sidepanel';
 import { PageHeader } from '@/components/layout/page-header';
 import { ZoneSelector } from '@/components/zone/zone-selector';
+import { UnassignedLocationsPanel } from '@/components/inventory/unassigned-locations-panel';
+import { FilterToolbar } from '@/components/inventory/filter-toolbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +41,12 @@ export function ZonesLayoutPage() {
     loading,
     lastSavedAt,
     currentZone,
+    filters,
+    setFilters,
+    loadComponentsMetadata,
+    isItemHighlighted,
+    items,
+    componentsMetadata,
   } = useZoneStore();
 
   const { getSelectedWarehouses } = useWarehouseStore();
@@ -52,8 +60,20 @@ export function ZonesLayoutPage() {
   // Zone state
   const [availableZones, setAvailableZones] = useState<string[]>([]);
   const hasZones = availableZones.length > 0;
-  
-;
+
+  // Load component metadata when zone changes
+  useEffect(() => {
+    if (singleWmsWarehouse && currentZone) {
+      loadComponentsMetadata();
+    }
+  }, [singleWmsWarehouse?.id, currentZone, loadComponentsMetadata]);
+
+  // Calculate highlighted items count for display
+  const highlightedItems = items.filter(item => isItemHighlighted(item.id));
+  const hasActiveFilters =
+    filters.showOnlyWithUnassigned ||
+    filters.showOnlyWithVariance ||
+    filters.showOnlyWithProductionLines;
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -338,6 +358,26 @@ export function ZonesLayoutPage() {
         {/* Canvas */}
         <div className="flex-1 overflow-hidden relative">
           <Canvas />
+
+          {/* Filter Toolbar */}
+          {singleWmsWarehouse && currentZone && (
+            <div className="absolute top-4 right-4 z-10">
+              <FilterToolbar
+                filters={filters}
+                onFiltersChange={setFilters}
+                activeCount={hasActiveFilters ? highlightedItems.length : undefined}
+                totalCount={items.length}
+              />
+            </div>
+          )}
+
+          {/* Unassigned Locations Panel */}
+          {singleWmsWarehouse && currentZone && (
+            <UnassignedLocationsPanel
+              warehouseCode={singleWmsWarehouse.code}
+              zone={currentZone}
+            />
+          )}
 
           {/* Loading overlay */}
           {loading && (

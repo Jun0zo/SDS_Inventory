@@ -25,6 +25,7 @@ export function Canvas() {
     dataVersion,
     setFindEmptySpaceCallback,
     setPanToPositionCallback,
+    isItemHighlighted,
   } = useZoneStore();
 
   const { getSelectedWarehouses } = useWarehouseStore();
@@ -528,10 +529,11 @@ export function Canvas() {
           }}
         >
           <GridLayer />
-          
+
           {(dragPreviewItems || items).map((item) => {
             const inventoryData = allInventoryData[item.location];
             const inventoryWithLoading = inventoryData ? inventoryData : { loading: false, total_items: 0, items: [] };
+            const isDimmed = !isItemHighlighted(item.id);
 
             return (
               <ItemView
@@ -539,6 +541,7 @@ export function Canvas() {
                 item={item}
                 onSelect={() => handleItemClick(item)}
                 inventory={inventoryWithLoading}
+                isDimmed={isDimmed}
               />
             );
           })}

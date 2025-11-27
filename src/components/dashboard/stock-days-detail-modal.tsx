@@ -10,8 +10,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useTranslation } from '@/store/useLanguageStore';
-import { Factory, Clock } from 'lucide-react';
+import { Factory, Clock, Filter } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { cn } from '@/lib/cn';
 
@@ -39,6 +46,8 @@ export function StockDaysDetailModal({
 }: StockDaysDetailModalProps) {
   const t = useTranslation();
   const [materials, setMaterials] = useState<MaterialStockDetail[]>([]);
+  const [selectedLineId, setSelectedLineId] = useState<string>('all');
+  const [materialLineMap, setMaterialLineMap] = useState<Map<string, string[]>>(new Map());
 
   useEffect(() => {
     if (open && stockDaysData.size > 0) {
@@ -63,8 +72,23 @@ export function StockDaysDetailModal({
       materialDetails.sort((a, b) => a.stockDays - b.stockDays);
 
       setMaterials(materialDetails);
+
+      // Create material-line mapping
+      const lineMap = new Map<string, string[]>();
+      productionLines.forEach((line) => {
+        if (line.materials) {
+          line.materials.forEach((material: any) => {
+            const existingLines = lineMap.get(material.material_code) || [];
+            if (!existingLines.includes(line.id)) {
+              existingLines.push(line.id);
+              lineMap.set(material.material_code, existingLines);
+            }
+          });
+        }
+      });
+      setMaterialLineMap(lineMap);
     }
-  }, [open, stockDaysData]);
+  }, [open, stockDaysData, productionLines]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -84,8 +108,16 @@ export function StockDaysDetailModal({
     }
   };
 
+  // Filter materials by selected line
+  const filteredMaterials = selectedLineId === 'all'
+    ? materials
+    : materials.filter(material => {
+        const lines = materialLineMap.get(material.materialCode);
+        return lines && lines.includes(selectedLineId);
+      });
+
   // Prepare chart data
-  const chartData = materials.slice(0, 20).map(material => ({
+  const chartData = filteredMaterials.slice(0, 20).map(material => ({
     name: material.materialCode,
     stockDays: Math.max(0, material.stockDays), // Ensure non-negative for chart
     status: material.status,
@@ -96,11 +128,11 @@ export function StockDaysDetailModal({
 
   // Statistics
   const stats = {
-    critical: materials.filter(m => m.status === 'critical').length,
-    urgent: materials.filter(m => m.status === 'urgent').length,
-    warning: materials.filter(m => m.status === 'warning').length,
-    safe: materials.filter(m => m.status === 'safe').length,
-    total: materials.length
+    critical: filteredMaterials.filter(m => m.status === 'critical').length,
+    urgent: filteredMaterials.filter(m => m.status === 'urgent').length,
+    warning: filteredMaterials.filter(m => m.status === 'warning').length,
+    safe: filteredMaterials.filter(m => m.status === 'safe').length,
+    total: filteredMaterials.length
   };
 
   return (
@@ -162,6 +194,28 @@ export function StockDaysDetailModal({
             </div>
           </div>
 
+          {/* Line Filter */}
+          <div className="flex items-center gap-3 p-4 bg-muted/30 rounded-lg">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">라인 필터:</span>
+            <Select value={selectedLineId} onValueChange={setSelectedLineId}>
+              <SelectTrigger className="w-[250px]">
+                <SelectValue placeholder="라인 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 라인</SelectItem>
+                {productionLines.map((line) => (
+                  <SelectItem key={line.id} value={line.id}>
+                    {line.line_name || line.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground ml-auto">
+              {filteredMaterials.length}개 자재 표시 중
+            </span>
+          </div>
+
           {/* Chart and Table Tabs */}
           <Tabs defaultValue="chart" className="space-y-4">
             <TabsList>
@@ -213,7 +267,7 @@ export function StockDaysDetailModal({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {materials.map((material) => (
+                  {filteredMaterials.map((material) => (
                     <TableRow key={material.materialCode}>
                       <TableCell className="font-mono text-sm">
                         {material.materialCode}

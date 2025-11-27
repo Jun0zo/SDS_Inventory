@@ -6,6 +6,12 @@ export interface StockInfo {
   currentStock: number;
   dailyConsumption: number;
   stockDays: number;
+  materialCode: string;
+  compatibleMaterials?: Array<{
+    materialCode: string;
+    stock: number;
+  }>;
+  hasCompatibles?: boolean;
 }
 
 export interface ProductionLineInfo {
@@ -14,6 +20,9 @@ export interface ProductionLineInfo {
   materials: Array<{
     material_code: string;
     quantity_per_unit: number;
+    material_group_id?: string;
+    is_primary?: boolean;
+    priority_in_group?: number;
   }>;
 }
 
@@ -21,18 +30,21 @@ export interface ProductionLineInfo {
  * Calculate stock days for a material
  * @param currentStock Current stock quantity
  * @param dailyConsumption Daily consumption rate
+ * @param materialCode Material code
  * @returns Stock days information
  */
 export function calculateStockDays(
   currentStock: number,
-  dailyConsumption: number
+  dailyConsumption: number,
+  materialCode: string
 ): StockInfo {
   const stockDays = dailyConsumption > 0 ? currentStock / dailyConsumption : 0;
 
   return {
     currentStock,
     dailyConsumption,
-    stockDays: Math.round(stockDays * 10) / 10 // Round to 1 decimal place
+    stockDays: Math.round(stockDays * 10) / 10, // Round to 1 decimal place
+    materialCode
   };
 }
 
@@ -86,6 +98,7 @@ export function getStockStatusLabel(stockDays: number): string {
 
 /**
  * Calculate stock days for all materials in production lines
+ * Supports material compatibility groups (materials with same group_id are pooled)
  * @param productionLines Array of production lines
  * @param materialStock Map of material_code to current stock
  * @returns Map of material_code to stock info
@@ -105,17 +118,91 @@ export function calculateAllStockDays(
   console.log('📊 Daily Consumption Map:', Array.from(consumptionMap.entries()));
 
   const stockDaysMap = new Map<string, StockInfo>();
+  const processedGroups = new Set<string>();
 
+  // Build material groups map
+  const materialGroups = new Map<string, Array<{ code: string; isPrimary: boolean; priority: number }>>();
+  for (const line of productionLines) {
+    for (const material of line.materials) {
+      if (material.material_group_id) {
+        const group = materialGroups.get(material.material_group_id) || [];
+        group.push({
+          code: material.material_code,
+          isPrimary: material.is_primary ?? true,
+          priority: material.priority_in_group ?? 0
+        });
+        materialGroups.set(material.material_group_id, group);
+      }
+    }
+  }
+
+  console.log('🔗 Material Groups:', Array.from(materialGroups.entries()));
+
+  // Calculate stock days for each material
   for (const [materialCode, dailyConsumption] of consumptionMap) {
-    const currentStock = materialStock.get(materialCode) || 0;
-    const stockInfo = calculateStockDays(currentStock, dailyConsumption);
-    stockDaysMap.set(materialCode, stockInfo);
+    // Find if this material is part of a compatibility group
+    let groupId: string | undefined;
+    for (const line of productionLines) {
+      const material = line.materials.find(m => m.material_code === materialCode);
+      if (material?.material_group_id) {
+        groupId = material.material_group_id;
+        break;
+      }
+    }
 
-    console.log(`📈 Material ${materialCode}:`, {
-      currentStock,
-      dailyConsumption,
-      stockDays: stockInfo.stockDays
-    });
+    if (groupId && !processedGroups.has(groupId)) {
+      // Process compatibility group
+      processedGroups.add(groupId);
+      const group = materialGroups.get(groupId) || [];
+
+      // Find primary material
+      const primaryMaterial = group.find(m => m.isPrimary) || group[0];
+
+      // Sum stock from all compatible materials
+      let totalStock = 0;
+      const compatibleMaterials: Array<{ materialCode: string; stock: number }> = [];
+
+      for (const member of group) {
+        const stock = materialStock.get(member.code) || 0;
+        totalStock += stock;
+        if (member.code !== primaryMaterial.code && stock > 0) {
+          compatibleMaterials.push({
+            materialCode: member.code,
+            stock
+          });
+        }
+      }
+
+      // Calculate stock days for primary material with pooled stock
+      const stockDays = dailyConsumption > 0 ? totalStock / dailyConsumption : 0;
+
+      stockDaysMap.set(primaryMaterial.code, {
+        currentStock: totalStock,
+        dailyConsumption,
+        stockDays: Math.round(stockDays * 10) / 10,
+        materialCode: primaryMaterial.code,
+        hasCompatibles: compatibleMaterials.length > 0,
+        compatibleMaterials: compatibleMaterials.length > 0 ? compatibleMaterials : undefined
+      });
+
+      console.log(`🔗 Material Group ${groupId} (Primary: ${primaryMaterial.code}):`, {
+        totalStock,
+        compatibleMaterials,
+        dailyConsumption,
+        stockDays: Math.round(stockDays * 10) / 10
+      });
+    } else if (!groupId) {
+      // Process standalone material (no compatibility group)
+      const currentStock = materialStock.get(materialCode) || 0;
+      const stockInfo = calculateStockDays(currentStock, dailyConsumption, materialCode);
+      stockDaysMap.set(materialCode, stockInfo);
+
+      console.log(`📈 Material ${materialCode}:`, {
+        currentStock,
+        dailyConsumption,
+        stockDays: stockInfo.stockDays
+      });
+    }
   }
 
   console.log('✅ Final Stock Days Map:', {
@@ -143,8 +230,26 @@ export function calculateStockDaysByLine(
     }>;
   }>,
   materialStock: Map<string, number>
-): Map<string, { lineName: string; avgStockDays: number; criticalCount: number; totalMaterials: number }> {
-  const result = new Map<string, { lineName: string; avgStockDays: number; criticalCount: number; totalMaterials: number }>();
+): Map<string, {
+  lineName: string;
+  avgStockDays: number;
+  criticalCount: number;
+  totalMaterials: number;
+  lowestStockMaterial: {
+    materialCode: string;
+    stockDays: number;
+  } | null;
+}> {
+  const result = new Map<string, {
+    lineName: string;
+    avgStockDays: number;
+    criticalCount: number;
+    totalMaterials: number;
+    lowestStockMaterial: {
+      materialCode: string;
+      stockDays: number;
+    } | null;
+  }>();
 
   for (const line of productionLines) {
     const lineMaterials = line.materials || [];
@@ -153,6 +258,7 @@ export function calculateStockDaysByLine(
     let totalStockDays = 0;
     let criticalCount = 0;
     const materialCodes = new Set<string>();
+    let lowestStockMaterial: { materialCode: string; stockDays: number } | null = null;
 
     for (const material of lineMaterials) {
       const currentStock = materialStock.get(material.material_code) || 0;
@@ -162,6 +268,14 @@ export function calculateStockDaysByLine(
       totalStockDays += stockDays;
       if (stockDays <= 0) criticalCount++;
       materialCodes.add(material.material_code);
+
+      // Track lowest stock material
+      if (lowestStockMaterial === null || stockDays < lowestStockMaterial.stockDays) {
+        lowestStockMaterial = {
+          materialCode: material.material_code,
+          stockDays: Math.round(stockDays * 10) / 10
+        };
+      }
     }
 
     const avgStockDays = totalStockDays / lineMaterials.length;
@@ -170,7 +284,8 @@ export function calculateStockDaysByLine(
       lineName: line.name,
       avgStockDays: Math.round(avgStockDays * 10) / 10,
       criticalCount,
-      totalMaterials: materialCodes.size
+      totalMaterials: materialCodes.size,
+      lowestStockMaterial
     });
   }
 

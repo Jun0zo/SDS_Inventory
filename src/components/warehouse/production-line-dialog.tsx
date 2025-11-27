@@ -39,11 +39,15 @@ export function ProductionLineDialog({
 
   // Combobox state
   const [comboboxOpen, setComboboxOpen] = useState(false);
+  const [inlineComboboxOpen, setInlineComboboxOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // New material form
   const [newMaterialCode, setNewMaterialCode] = useState('');
   const [newMaterialQuantity, setNewMaterialQuantity] = useState('1');
+
+  // Compatibility management
+  const [addingCompatibleFor, setAddingCompatibleFor] = useState<string | null>(null); // material id we're adding compatible for
 
   // Load available materials when dialog opens
   useEffect(() => {
@@ -123,15 +127,58 @@ export function ProductionLineDialog({
       return;
     }
 
-    const newMaterial: ProductionLineMaterial = {
-      id: crypto.randomUUID(),
-      material_code: newMaterialCode.trim(),
-      material_name: selectedMaterial.name,
-      quantity_per_unit: quantity,
-      unit: selectedMaterial.unit,
-    };
+    let newMaterial: ProductionLineMaterial;
 
-    setMaterials([...materials, newMaterial]);
+    if (addingCompatibleFor) {
+      // Adding a compatible material to an existing material
+      const primaryMaterial = materials.find(m => m.id === addingCompatibleFor);
+      if (!primaryMaterial) {
+        alert('주 자재를 찾을 수 없습니다.');
+        return;
+      }
+
+      // Get or create material_group_id
+      const groupId = primaryMaterial.material_group_id || crypto.randomUUID();
+
+      // If primary material doesn't have a group yet, update it
+      if (!primaryMaterial.material_group_id) {
+        const updatedMaterials = materials.map(m =>
+          m.id === addingCompatibleFor
+            ? { ...m, material_group_id: groupId, is_primary: true, priority_in_group: 0 }
+            : m
+        );
+        setMaterials(updatedMaterials);
+      }
+
+      // Calculate priority: find highest priority in this group and add 1
+      const groupMaterials = materials.filter(m => m.material_group_id === groupId);
+      const maxPriority = groupMaterials.reduce((max, m) => Math.max(max, m.priority_in_group || 0), 0);
+
+      newMaterial = {
+        id: crypto.randomUUID(),
+        material_code: newMaterialCode.trim(),
+        material_name: selectedMaterial.name,
+        quantity_per_unit: quantity,
+        unit: selectedMaterial.unit,
+        material_group_id: groupId,
+        is_primary: false,
+        priority_in_group: maxPriority + 1,
+      };
+
+      setMaterials([...materials, newMaterial]);
+      setAddingCompatibleFor(null); // Exit compatibility mode
+    } else {
+      // Adding a standalone material
+      newMaterial = {
+        id: crypto.randomUUID(),
+        material_code: newMaterialCode.trim(),
+        material_name: selectedMaterial.name,
+        quantity_per_unit: quantity,
+        unit: selectedMaterial.unit,
+      };
+
+      setMaterials([...materials, newMaterial]);
+    }
 
     // Reset form
     setNewMaterialCode('');
@@ -139,7 +186,62 @@ export function ProductionLineDialog({
   };
 
   const handleRemoveMaterial = (id: string) => {
-    setMaterials(materials.filter(m => m.id !== id));
+    const materialToRemove = materials.find(m => m.id === id);
+
+    // If removing a primary material with a group, remove all materials in the group
+    if (materialToRemove?.material_group_id && materialToRemove.is_primary) {
+      const shouldRemoveGroup = confirm(
+        '이 자재는 호환 자재 그룹의 주 자재입니다. 그룹 전체를 삭제하시겠습니까?'
+      );
+
+      if (shouldRemoveGroup) {
+        setMaterials(materials.filter(m => m.material_group_id !== materialToRemove.material_group_id));
+      }
+    } else {
+      setMaterials(materials.filter(m => m.id !== id));
+    }
+  };
+
+  // Handle quantity change for existing materials
+  const handleQuantityChange = (materialId: string, newQuantity: string) => {
+    const quantity = parseFloat(newQuantity);
+    if (!isNaN(quantity) && quantity > 0) {
+      setMaterials(materials.map(m =>
+        m.id === materialId ? { ...m, quantity_per_unit: quantity } : m
+      ));
+    }
+  };
+
+  // Organize materials for display: group compatible materials together
+  const organizedMaterials = () => {
+    const result: ProductionLineMaterial[] = [];
+    const processedIds = new Set<string>();
+
+    materials.forEach(material => {
+      if (processedIds.has(material.id)) return;
+
+      // Add the material
+      result.push(material);
+      processedIds.add(material.id);
+
+      // If this material is primary or has a group, find and add its compatible materials
+      if (material.material_group_id && material.is_primary) {
+        const compatibles = materials
+          .filter(m =>
+            m.material_group_id === material.material_group_id &&
+            !m.is_primary &&
+            !processedIds.has(m.id)
+          )
+          .sort((a, b) => (a.priority_in_group || 0) - (b.priority_in_group || 0));
+
+        compatibles.forEach(comp => {
+          result.push(comp);
+          processedIds.add(comp.id);
+        });
+      }
+    });
+
+    return result;
   };
 
   const handleSave = () => {
@@ -336,7 +438,8 @@ export function ProductionLineDialog({
                   <Input
                     id="materialQuantity"
                     type="number"
-                    min="1"
+                    step="any"
+                    min="0"
                     placeholder="수량"
                     value={newMaterialQuantity}
                     onChange={(e) => setNewMaterialQuantity(e.target.value)}
@@ -363,11 +466,11 @@ export function ProductionLineDialog({
                     <TableHead>자재 코드</TableHead>
                     <TableHead>자재명</TableHead>
                     <TableHead>수량/개</TableHead>
-                    <TableHead className="w-[80px]">삭제</TableHead>
+                    <TableHead className="w-[140px]">작업</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {materials.map((material) => {
+                  {organizedMaterials().flatMap((material) => {
                     // Find the selected material to get category information
                     const selectedMaterial = availableMaterials.find(m => m.code === material.material_code);
                     const displayName = selectedMaterial?.majorCategory
@@ -378,27 +481,156 @@ export function ProductionLineDialog({
                     const currentMaterial = availableMaterials.find(m => m.code === material.material_code);
                     const majorCategory = currentMaterial?.majorCategory || 'null';
 
-                    return (
-                      <TableRow key={material.id}>
+                    // Check if this is a compatible material (not primary)
+                    const isCompatible = material.material_group_id && !material.is_primary;
+
+                    const rows = [
+                      <TableRow key={material.id} className={isCompatible ? 'bg-blue-50/50' : ''}>
                         <TableCell className="text-sm">
                           {majorCategory}
                         </TableCell>
                         <TableCell className="font-mono text-sm">
+                          {isCompatible && <span className="text-blue-500 mr-1">↳</span>}
                           {material.material_code}
                         </TableCell>
                         <TableCell>{displayName}</TableCell>
-                        <TableCell>{material.quantity_per_unit} {material.unit}</TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveMaterial(material.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={material.quantity_per_unit}
+                              onChange={(e) => handleQuantityChange(material.id, e.target.value)}
+                              className="w-20 h-8"
+                            />
+                            <span className="text-sm text-muted-foreground">{material.unit}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {(!material.material_group_id || material.is_primary) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setAddingCompatibleFor(material.id)}
+                                className="h-7 text-xs"
+                                title="호환 자재 추가"
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                호환
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveMaterial(material.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
-                    );
+                    ];
+
+                    // Add inline form row if this material is selected for compatible material addition
+                    if (addingCompatibleFor === material.id) {
+                      rows.push(
+                        <TableRow key={`${material.id}-form`} className="bg-blue-50">
+                          <TableCell colSpan={5} className="py-3">
+                            <div className="flex items-center gap-3 pl-6">
+                              <span className="text-blue-600 font-semibold">↳</span>
+                              <div className="flex-1 flex items-center gap-2">
+                                <Popover open={inlineComboboxOpen} onOpenChange={setInlineComboboxOpen}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      aria-expanded={inlineComboboxOpen}
+                                      className="w-[300px] justify-between bg-white"
+                                    >
+                                      {newMaterialCode
+                                        ? availableMaterials.find((m) => m.code === newMaterialCode)?.code
+                                        : "호환 자재 코드 선택"}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[400px] p-0" align="start" side="bottom">
+                                    <div className="p-2">
+                                      <Input
+                                        placeholder="자재 코드 또는 이름을 검색하세요..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="mb-2"
+                                      />
+                                      <div
+                                        className="max-h-[200px] overflow-y-auto border rounded-md"
+                                        style={{ scrollbarWidth: 'thin' }}
+                                      >
+                                        {searchQuery.trim() === '' ? (
+                                          <div className="py-6 text-center text-sm text-muted-foreground">
+                                            검색어를 입력하세요
+                                          </div>
+                                        ) : filteredMaterials.length === 0 ? (
+                                          <div className="py-6 text-center text-sm text-muted-foreground">
+                                            해당 자재를 찾을 수 없습니다.
+                                          </div>
+                                        ) : (
+                                          <div className="space-y-1 p-1">
+                                            {filteredMaterials.map((mat) => (
+                                              <div
+                                                key={mat.code}
+                                                className={cn(
+                                                  "flex items-center p-2 rounded-md cursor-pointer hover:bg-accent transition-colors",
+                                                  newMaterialCode === mat.code && "bg-accent"
+                                                )}
+                                                onClick={() => handleMaterialCodeChange(mat.code)}
+                                              >
+                                                <Check
+                                                  className={cn(
+                                                    "mr-2 h-4 w-4 flex-shrink-0",
+                                                    newMaterialCode === mat.code ? "opacity-100" : "opacity-0"
+                                                  )}
+                                                />
+                                                <div className="flex flex-col flex-1 min-w-0">
+                                                  <span className="font-medium text-sm truncate">{mat.code}</span>
+                                                  <span className="text-xs text-muted-foreground truncate">{mat.name}</span>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  placeholder="수량"
+                                  value={newMaterialQuantity}
+                                  onChange={(e) => setNewMaterialQuantity(e.target.value)}
+                                  className="w-24 bg-white"
+                                />
+                                <Button onClick={handleAddMaterial} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                                  추가
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setAddingCompatibleFor(null)}
+                                >
+                                  취소
+                                </Button>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+
+                    return rows;
                   })}
                 </TableBody>
               </Table>

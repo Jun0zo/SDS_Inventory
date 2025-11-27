@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Package } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, ChevronDown, ChevronUp } from 'lucide-react';
 import { ProductionLineDialog } from './production-line-dialog';
 import {
   AlertDialog,
@@ -36,6 +36,7 @@ export function ProductionLineManagement({
   const [editingLine, setEditingLine] = useState<ProductionLine | undefined>();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [lineToDelete, setLineToDelete] = useState<string | null>(null);
+  const [expandedLines, setExpandedLines] = useState<Record<string, boolean>>({});
 
   const handleEdit = (line: ProductionLine) => {
     setEditingLine(line);
@@ -68,6 +69,13 @@ export function ProductionLineManagement({
       setLineToDelete(null);
     }
     setDeleteDialogOpen(false);
+  };
+
+  const toggleLineExpand = (lineId: string) => {
+    setExpandedLines(prev => ({
+      ...prev,
+      [lineId]: !prev[lineId]
+    }));
   };
 
   return (
@@ -134,8 +142,21 @@ export function ProductionLineManagement({
                 {/* BOM Table */}
                 {line.materials.length > 0 && (
                   <div className="mt-3">
-                    <h4 className="text-sm font-medium mb-2">BOM (제품 1개당 자재 소모량)</h4>
-                    <Table>
+                    <div
+                      className="flex items-center justify-between cursor-pointer hover:bg-muted/50 p-2 rounded-md -ml-2"
+                      onClick={() => toggleLineExpand(line.id)}
+                    >
+                      <h4 className="text-sm font-medium">
+                        BOM (제품 1개당 자재 소모량) - {line.materials.length}개 자재
+                      </h4>
+                      {expandedLines[line.id] ? (
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                    {expandedLines[line.id] && (
+                      <Table className="mt-2">
                       <TableHeader>
                         <TableRow>
                           <TableHead>자재 코드</TableHead>
@@ -145,18 +166,53 @@ export function ProductionLineManagement({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {line.materials.map((material) => (
-                          <TableRow key={material.id}>
-                            <TableCell className="font-mono text-sm">
-                              {material.material_code}
-                            </TableCell>
-                            <TableCell>{material.material_name}</TableCell>
-                            <TableCell>{material.quantity_per_unit}</TableCell>
-                            <TableCell>{material.unit}</TableCell>
-                          </TableRow>
-                        ))}
+                        {(() => {
+                          // Organize materials by groups for display
+                          const organized: typeof line.materials = [];
+                          const processedIds = new Set<string>();
+
+                          line.materials.forEach(material => {
+                            if (processedIds.has(material.id)) return;
+
+                            // Add the material
+                            organized.push(material);
+                            processedIds.add(material.id);
+
+                            // If this is a primary material, add its compatible materials right after
+                            if (material.material_group_id && material.is_primary) {
+                              const compatibles = line.materials
+                                .filter(m =>
+                                  m.material_group_id === material.material_group_id &&
+                                  !m.is_primary &&
+                                  !processedIds.has(m.id)
+                                )
+                                .sort((a, b) => (a.priority_in_group || 0) - (b.priority_in_group || 0));
+
+                              compatibles.forEach(comp => {
+                                organized.push(comp);
+                                processedIds.add(comp.id);
+                              });
+                            }
+                          });
+
+                          return organized.map((material) => {
+                            const isCompatible = material.material_group_id && !material.is_primary;
+                            return (
+                              <TableRow key={material.id} className={isCompatible ? 'bg-blue-50/50' : ''}>
+                                <TableCell className="font-mono text-sm">
+                                  {isCompatible && <span className="text-blue-500 mr-1">↳</span>}
+                                  {material.material_code}
+                                </TableCell>
+                                <TableCell>{material.material_name}</TableCell>
+                                <TableCell>{material.quantity_per_unit}</TableCell>
+                                <TableCell>{material.unit}</TableCell>
+                              </TableRow>
+                            );
+                          });
+                        })()}
                       </TableBody>
-                    </Table>
+                      </Table>
+                    )}
                   </div>
                 )}
               </div>
