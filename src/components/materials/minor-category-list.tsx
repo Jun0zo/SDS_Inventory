@@ -220,7 +220,7 @@ export function MinorCategoryList({
                   />
                   <Textarea
                     value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditDescription(e.target.value)}
                     placeholder="Description (optional)"
                     rows={2}
                     disabled={saving}
@@ -295,7 +295,7 @@ export function MinorCategoryList({
         />
         <Textarea
           value={newDescription}
-          onChange={(e) => setNewDescription(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewDescription(e.target.value)}
           placeholder="Description (optional)"
           rows={2}
           disabled={creating}

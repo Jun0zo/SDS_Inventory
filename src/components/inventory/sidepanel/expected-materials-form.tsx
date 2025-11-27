@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Save, X, AlertCircle } from 'lucide-react';
-import { cn } from '@/lib/cn';
 import type { ExpectedMaterials } from '@/types/component-metadata';
 import {
   getMajorCategories,

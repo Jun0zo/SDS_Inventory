@@ -46,7 +46,6 @@ export function ZonesLayoutPage() {
     loadComponentsMetadata,
     isItemHighlighted,
     items,
-    componentsMetadata,
   } = useZoneStore();
 
   const { getSelectedWarehouses } = useWarehouseStore();
@@ -376,6 +375,7 @@ export function ZonesLayoutPage() {
             <UnassignedLocationsPanel
               warehouseCode={singleWmsWarehouse.code}
               zone={currentZone}
+              isEditMode={isEditMode}
             />
           )}
 

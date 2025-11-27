@@ -204,10 +204,9 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false }: ItemVi
               )}
               {/* Material Variance Indicator */}
               {itemMetadata?.has_material_variance && (
-                <AlertTriangle
-                  className="h-3 w-3 text-red-600"
-                  title="Material mismatch detected"
-                />
+                <span title="Material mismatch detected">
+                  <AlertTriangle className="h-3 w-3 text-red-600" />
+                </span>
               )}
               {/* Unassigned Locations Indicator */}
               {itemMetadata?.has_unassigned_locations && (

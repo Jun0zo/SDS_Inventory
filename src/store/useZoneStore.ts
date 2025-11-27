@@ -59,7 +59,7 @@ interface ZoneState {
   
   // Actions - CRUD
   addItem: (item: AnyItem, findEmptySpace?: (width: number, height: number) => { x: number; y: number; foundInViewport: boolean }) => void;
-  addItemFromUnassigned: (cellNo: string) => void;
+  addItemFromUnassigned: (cellNo: string, itemType?: 'rack' | 'flat') => void;
   updateItem: (id: string, updates: Partial<AnyItem>) => void;
   removeItem: (id: string) => void;
   setItems: (items: AnyItem[]) => void;
@@ -247,14 +247,27 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
     return { item: itemToAdd, shouldPanToItem };
   },
 
-  addItemFromUnassigned: (cellNo) => {
+  addItemFromUnassigned: (cellNo, itemType = 'flat') => {
     const state = get();
 
-    // Generate a unique ID for the new item
-    const id = `item-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    // Generate a unique UUID for the new item
+    const id = crypto.randomUUID();
 
-    // Create a new flat storage item
-    const newItem: AnyItem = {
+    // Create a new item based on the selected type
+    const newItem: AnyItem = itemType === 'rack' ? {
+      id,
+      type: 'rack',
+      location: cellNo,
+      zone: state.currentZone,
+      x: 0,
+      y: 0,
+      w: 3,  // Default width: 3 grid cells for rack
+      h: 6,  // Default height: 6 grid cells for rack
+      floors: 5,  // Default: 5 floors for rack
+      rows: 5,  // Default: 5 rows for rack
+      cols: 2,  // Default: 2 cols (bays) for rack
+      rotation: 0,
+    } : {
       id,
       type: 'flat',
       location: cellNo,
@@ -272,9 +285,10 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
     // This will automatically find empty space and handle validation
     get().addItem(newItem);
 
+    const typeLabel = itemType === 'rack' ? '랙' : '평치';
     toast({
       title: '위치 추가됨',
-      description: `${cellNo} 위치가 레이아웃에 추가되었습니다.`,
+      description: `${cellNo} 위치가 ${typeLabel}로 레이아웃에 추가되었습니다.`,
     });
   },
 

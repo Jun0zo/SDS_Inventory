@@ -132,7 +132,7 @@ export function EditCategoryDialog({
               <Textarea
                 id="edit-description"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
                 placeholder="Optional description"
                 rows={3}
                 disabled={saving}

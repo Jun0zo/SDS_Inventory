@@ -11,8 +11,6 @@ import type {
   ComponentMetadataSummary,
   ExpectedMaterials,
   ProductionLineFeed,
-  GetComponentMetadataResponse,
-  GetZoneComponentsMetadataResponse,
 } from "@/types/component-metadata";
 
 // ============================================================

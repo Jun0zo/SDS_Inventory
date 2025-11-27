@@ -18,7 +18,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Factory, Plus, X, TrendingUp, Building2 } from 'lucide-react';
-import { cn } from '@/lib/cn';
 import type { ProductionLineFeed } from '@/types/component-metadata';
 import {
   getWarehouseProductionLines,
