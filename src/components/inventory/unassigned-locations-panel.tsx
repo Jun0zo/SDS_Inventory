@@ -5,6 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ChevronDown,
   ChevronUp,
   MapPin,
@@ -19,16 +26,19 @@ import { useZoneStore } from "@/store/useZoneStore";
 interface UnassignedLocationsPanelProps {
   warehouseCode: string;
   zone: string;
+  isEditMode?: boolean;
 }
 
 export function UnassignedLocationsPanel({
   warehouseCode,
   zone,
+  isEditMode = false,
 }: UnassignedLocationsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [locations, setLocations] = useState<UnassignedLocation[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [locationTypes, setLocationTypes] = useState<Record<string, 'rack' | 'flat'>>({});
   const { addItemFromUnassigned } = useZoneStore();
 
   // Load unassigned locations
@@ -57,9 +67,20 @@ export function UnassignedLocationsPanel({
   );
 
   const handleAddToLayout = (location: UnassignedLocation) => {
-    addItemFromUnassigned(location.cell_no);
-    // Reload to update the list
-    loadLocations();
+    const selectedType = locationTypes[location.cell_no] || 'flat';
+    addItemFromUnassigned(location.cell_no, selectedType);
+    // Remove from local list immediately
+    setLocations((prev) => prev.filter((loc) => loc.cell_no !== location.cell_no));
+    // Clean up the type selection
+    setLocationTypes((prev) => {
+      const updated = { ...prev };
+      delete updated[location.cell_no];
+      return updated;
+    });
+  };
+
+  const handleTypeChange = (cellNo: string, type: 'rack' | 'flat') => {
+    setLocationTypes((prev) => ({ ...prev, [cellNo]: type }));
   };
 
   if (!isExpanded) {
@@ -169,14 +190,32 @@ export function UnassignedLocationsPanel({
                             </div>
                           )}
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleAddToLayout(location)}
-                        title="레이아웃에 추가"
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
+                      {isEditMode && (
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={locationTypes[location.cell_no] || 'flat'}
+                            onValueChange={(value) =>
+                              handleTypeChange(location.cell_no, value as 'rack' | 'flat')
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-20 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="rack">렉</SelectItem>
+                              <SelectItem value="flat">평치</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleAddToLayout(location)}
+                            title="레이아웃에 추가"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </Card>
                 ))}

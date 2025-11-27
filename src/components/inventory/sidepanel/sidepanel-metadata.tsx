@@ -12,10 +12,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ExpectedMaterialsForm } from './expected-materials-form';
 import { MaterialVarianceIndicator } from '../material-variance-indicator';
 import { ProductionLineLinks } from './production-line-links';
-import { Factory, Package, AlertTriangle } from 'lucide-react';
+import { Factory, Package } from 'lucide-react';
 import {
   getComponentMetadata,
-  getWarehouseProductionLines,
 } from '@/lib/supabase/component-metadata';
 import type { ComponentMetadata } from '@/types/component-metadata';
 

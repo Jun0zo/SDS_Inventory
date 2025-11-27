@@ -124,7 +124,7 @@ export function AddCategoryDialog({
               <Textarea
                 id="description"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
                 placeholder="Optional description of this category"
                 rows={3}
                 disabled={saving}
