@@ -41,11 +41,11 @@ export function UnassignedLocationsPanel({
   const [locationTypes, setLocationTypes] = useState<Record<string, 'rack' | 'flat'>>({});
   const { addItemFromUnassigned } = useZoneStore();
 
-  // Load unassigned locations
+  // Load unassigned locations - get ALL locations for the warehouse (not filtered by zone)
   const loadLocations = async () => {
     setLoading(true);
     try {
-      const data = await fetchUnassignedLocations(warehouseCode, zone);
+      const data = await fetchUnassignedLocations(warehouseCode, null);
       setLocations(data);
     } catch (error) {
       console.error("Failed to load unassigned locations:", error);
@@ -54,12 +54,12 @@ export function UnassignedLocationsPanel({
     }
   };
 
-  // Load on mount and when zone changes
+  // Load on mount and when warehouse changes (not zone)
   useEffect(() => {
-    if (warehouseCode && zone) {
+    if (warehouseCode) {
       loadLocations();
     }
-  }, [warehouseCode, zone]);
+  }, [warehouseCode]);
 
   // Filter locations based on search query
   const filteredLocations = locations.filter((loc) =>

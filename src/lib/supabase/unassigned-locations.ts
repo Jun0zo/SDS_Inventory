@@ -3,7 +3,7 @@ import type { UnassignedLocation } from "@/types/unassigned-location";
 
 export async function fetchUnassignedLocations(
   warehouseCode: string,
-  zone: string
+  zone?: string | null
 ): Promise<UnassignedLocation[]> {
   try {
     // Get warehouse ID
@@ -20,9 +20,10 @@ export async function fetchUnassignedLocations(
 
     // Query to find unassigned locations
     // A location is unassigned if it exists in wms_raw_rows but not in items
+    // If zone is null/undefined, get all unassigned locations for the warehouse
     const { data, error } = await supabase.rpc("get_unassigned_locations", {
       p_warehouse_id: warehouse.id,
-      p_zone: zone,
+      p_zone: zone || null,
     });
 
     if (error) {
