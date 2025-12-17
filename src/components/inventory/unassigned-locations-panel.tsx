@@ -25,13 +25,11 @@ import { useZoneStore } from "@/store/useZoneStore";
 
 interface UnassignedLocationsPanelProps {
   warehouseCode: string;
-  zone: string;
   isEditMode?: boolean;
 }
 
 export function UnassignedLocationsPanel({
   warehouseCode,
-  zone,
   isEditMode = false,
 }: UnassignedLocationsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);

@@ -374,7 +374,6 @@ export function ZonesLayoutPage() {
           {singleWmsWarehouse && currentZone && (
             <UnassignedLocationsPanel
               warehouseCode={singleWmsWarehouse.code}
-              zone={currentZone}
               isEditMode={isEditMode}
             />
           )}
