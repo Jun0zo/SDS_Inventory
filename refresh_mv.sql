@@ -1,1 +1,0 @@
-REFRESH MATERIALIZED VIEW CONCURRENTLY public.inventory_discrepancies_mv;

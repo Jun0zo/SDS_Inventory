@@ -51,8 +51,10 @@ BEGIN
             -- Flat exact match
             UPPER(TRIM(w.cell_no)) = UPPER(TRIM(i.location))
             OR
-            -- Rack pattern match: rack "A35" matches "A35-01-01", "A35-02-03", etc.
-            UPPER(TRIM(w.cell_no)) ~ ('^' || UPPER(TRIM(i.location)) || '-[0-9]+-[0-9]+$')
+            -- Rack pattern match with OPTIONAL suffix:
+            -- rack "B" matches "B" (exact) AND "B-01-01" (with coordinates)
+            -- rack "A35" matches "A35" (exact) AND "A35-01-01" (with coordinates)
+            UPPER(TRIM(w.cell_no)) ~ ('^' || UPPER(TRIM(i.location)) || '(-[0-9]+-[0-9]+)?$')
           )
       )
   )

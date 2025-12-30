@@ -236,7 +236,6 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false }: ItemVi
           {capacity > 0 && (
             <div className="mt-1 pt-1 border-t">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Stock:</span>
                 <span className="font-medium" style={{ color: utilizationColor }}>
                   {currentCount} / {capacity}
                 </span>
@@ -251,7 +250,7 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false }: ItemVi
                 />
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                {utilization.toFixed(0)}% full
+                {utilization.toFixed(0)}%
               </div>
             </div>
           )}

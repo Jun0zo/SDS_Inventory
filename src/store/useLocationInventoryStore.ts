@@ -1,5 +1,11 @@
 import { supabase } from '@/lib/supabase/client';
 
+export interface StockStatusBreakdown {
+  available: number;
+  qc: number;
+  blocked: number;
+}
+
 export interface LocationInventorySummary {
   location: string;
   zone: string;
@@ -9,6 +15,8 @@ export interface LocationInventorySummary {
   max_capacity?: number;
   utilization_percentage?: number;
   current_stock_count?: number;
+  stock_status?: string; // Overall stock status
+  stock_breakdown?: StockStatusBreakdown; // Batch breakdown
 }
 
 // Direct MV query functions (no caching)
