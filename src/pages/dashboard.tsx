@@ -22,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { StockStatusDetailModal } from '@/components/dashboard/stock-status-detail-modal';
 import { StockDaysDetailModal } from '@/components/dashboard/stock-days-detail-modal';
 import { ExpiringItemsDetailModal } from '@/components/dashboard/expiring-items-detail-modal';
+import { MaterialCapacitySummary } from '@/components/dashboard/material-capacity-summary';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -1225,6 +1226,16 @@ export function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Material Capacity by Category */}
+        {hasSelection && selectedWarehouseIds.length > 0 && (
+          <div className="grid gap-4">
+            <MaterialCapacitySummary
+              warehouseId={selectedWarehouseIds[0]}
+              showTitle={true}
+            />
+          </div>
+        )}
 
         {/* Recent Activity */}
         <div className="grid gap-4 lg:grid-cols-1">

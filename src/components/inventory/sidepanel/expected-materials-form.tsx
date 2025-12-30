@@ -2,12 +2,14 @@
  * Expected Materials Form Component
  *
  * Allows users to define expected material types (major/minor category)
- * for a layout component. Supports "any" as a wildcard option.
+ * and/or specific item codes for a layout component.
+ * Supports mixed mode: category + item codes (OR logic)
  */
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -16,7 +18,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Save, X, AlertCircle } from 'lucide-react';
+import { Save, X, AlertCircle, Plus, Package, Tag } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { ExpectedMaterials } from '@/types/component-metadata';
 import {
   getMajorCategories,
@@ -24,10 +27,16 @@ import {
   updateComponentExpectedMaterials,
 } from '@/lib/supabase/component-metadata';
 
+// Extended interface to include item codes
+interface ExpectedMaterialsWithCodes extends ExpectedMaterials {
+  item_codes?: string[];
+}
+
 interface ExpectedMaterialsFormProps {
   itemId: string;
-  currentExpected?: ExpectedMaterials;
-  onSave?: (expected: ExpectedMaterials) => void;
+  currentExpected?: ExpectedMaterialsWithCodes;
+  currentItemCodes?: string[];
+  onSave?: (expected: ExpectedMaterialsWithCodes) => void;
   onCancel?: () => void;
   isEditMode?: boolean;
 }
@@ -35,6 +44,7 @@ interface ExpectedMaterialsFormProps {
 export function ExpectedMaterialsForm({
   itemId,
   currentExpected,
+  currentItemCodes,
   onSave,
   onCancel,
   isEditMode = false,
@@ -45,6 +55,10 @@ export function ExpectedMaterialsForm({
   const [minorCategory, setMinorCategory] = useState<string>(
     currentExpected?.minor_category || 'any'
   );
+  const [itemCodes, setItemCodes] = useState<string[]>(
+    currentItemCodes || currentExpected?.item_codes || []
+  );
+  const [newItemCode, setNewItemCode] = useState('');
   const [majorCategories, setMajorCategories] = useState<string[]>([]);
   const [minorCategories, setMinorCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -72,21 +86,34 @@ export function ExpectedMaterialsForm({
     setMinorCategories(categories);
   };
 
+  const addItemCode = () => {
+    const trimmed = newItemCode.trim().toUpperCase();
+    if (trimmed && !itemCodes.includes(trimmed)) {
+      setItemCodes([...itemCodes, trimmed]);
+      setNewItemCode('');
+    }
+  };
+
+  const removeItemCode = (code: string) => {
+    setItemCodes(itemCodes.filter((c) => c !== code));
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
 
-    const expected: ExpectedMaterials = {
+    const expected: ExpectedMaterialsWithCodes = {
       major_category: majorCategory === 'any' ? undefined : majorCategory,
       minor_category: minorCategory === 'any' ? undefined : minorCategory,
+      item_codes: itemCodes.length > 0 ? itemCodes : undefined,
     };
 
-    const success = await updateComponentExpectedMaterials(itemId, expected);
+    const success = await updateComponentExpectedMaterials(itemId, expected, itemCodes);
 
     if (success) {
       onSave?.(expected);
     } else {
-      setError('Failed to save expected materials. Please try again.');
+      setError('Failed to save. Please try again.');
     }
 
     setSaving(false);
@@ -96,39 +123,74 @@ export function ExpectedMaterialsForm({
     // Reset to current values
     setMajorCategory(currentExpected?.major_category || 'any');
     setMinorCategory(currentExpected?.minor_category || 'any');
+    setItemCodes(currentItemCodes || currentExpected?.item_codes || []);
+    setNewItemCode('');
     setError(null);
     onCancel?.();
   };
 
+  const originalItemCodes = currentItemCodes || currentExpected?.item_codes || [];
   const hasChanges =
     majorCategory !== (currentExpected?.major_category || 'any') ||
-    minorCategory !== (currentExpected?.minor_category || 'any');
+    minorCategory !== (currentExpected?.minor_category || 'any') ||
+    JSON.stringify(itemCodes.sort()) !== JSON.stringify(originalItemCodes.sort());
 
   // View-only mode
   if (!isEditMode) {
+    const hasCategory = currentExpected?.major_category;
+    const hasCodes = originalItemCodes.length > 0;
+
     return (
-      <div className="space-y-2">
-        <div>
-          <Label className="text-xs text-muted-foreground">Major Category</Label>
-          <div className="mt-1">
-            <Badge variant="secondary">
-              {currentExpected?.major_category || 'any'}
-            </Badge>
-          </div>
-        </div>
-        {currentExpected?.minor_category && (
+      <div className="space-y-3">
+        {/* Category */}
+        {hasCategory && (
           <div>
-            <Label className="text-xs text-muted-foreground">Minor Category</Label>
-            <div className="mt-1">
-              <Badge variant="outline">
-                {currentExpected.minor_category}
+            <Label className="text-xs text-muted-foreground">Category</Label>
+            <div className="mt-1 flex gap-1 flex-wrap">
+              <Badge variant="secondary">
+                {currentExpected.major_category}
               </Badge>
+              {currentExpected.minor_category && (
+                <Badge variant="outline">
+                  {currentExpected.minor_category}
+                </Badge>
+              )}
             </div>
           </div>
         )}
-        {!currentExpected && (
+
+        {/* Item Codes */}
+        {hasCodes && (
+          <div>
+            <Label className="text-xs text-muted-foreground">
+              Allowed Item Codes ({originalItemCodes.length})
+            </Label>
+            <div className="mt-1 flex gap-1 flex-wrap">
+              {originalItemCodes.slice(0, 5).map((code) => (
+                <Badge key={code} variant="outline" className="text-xs">
+                  <Tag className="h-3 w-3 mr-1" />
+                  {code}
+                </Badge>
+              ))}
+              {originalItemCodes.length > 5 && (
+                <Badge variant="secondary" className="text-xs">
+                  +{originalItemCodes.length - 5} more
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Combined Info */}
+        {hasCategory && hasCodes && (
+          <p className="text-xs text-muted-foreground">
+            Items matching category OR item codes are allowed
+          </p>
+        )}
+
+        {!hasCategory && !hasCodes && (
           <p className="text-sm text-muted-foreground italic">
-            No expected materials configured
+            No restrictions configured (any item allowed)
           </p>
         )}
       </div>
@@ -138,70 +200,176 @@ export function ExpectedMaterialsForm({
   // Edit mode
   return (
     <div className="space-y-4">
-      {/* Major Category */}
-      <div className="space-y-2">
-        <Label htmlFor="major-category">Major Category</Label>
-        <Select value={majorCategory} onValueChange={setMajorCategory}>
-          <SelectTrigger id="major-category">
-            <SelectValue placeholder="Select major category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="any">
-              <span className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">
-                  ANY
-                </Badge>
-                <span>Accept any category</span>
-              </span>
-            </SelectItem>
-            {majorCategories.map((category) => (
-              <SelectItem key={category} value={category}>
-                {category}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <Tabs defaultValue="category" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="category" className="flex items-center gap-1.5">
+            <Package className="h-3.5 w-3.5" />
+            Category
+          </TabsTrigger>
+          <TabsTrigger value="items" className="flex items-center gap-1.5">
+            <Tag className="h-3.5 w-3.5" />
+            Item Codes
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Minor Category */}
-      <div className="space-y-2">
-        <Label htmlFor="minor-category">Minor Category</Label>
-        <Select
-          value={minorCategory}
-          onValueChange={setMinorCategory}
-          disabled={majorCategory === 'any'}
-        >
-          <SelectTrigger id="minor-category">
-            <SelectValue placeholder="Select minor category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="any">
-              <span className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">
-                  ANY
-                </Badge>
-                <span>Accept any category</span>
-              </span>
-            </SelectItem>
-            {minorCategories.map((category) => (
-              <SelectItem key={category} value={category}>
-                {category}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {majorCategory === 'any' && (
+        {/* Category Tab */}
+        <TabsContent value="category" className="space-y-4 mt-4">
+          {/* Major Category */}
+          <div className="space-y-2">
+            <Label htmlFor="major-category">Major Category</Label>
+            <Select value={majorCategory} onValueChange={setMajorCategory}>
+              <SelectTrigger id="major-category">
+                <SelectValue placeholder="Select major category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">
+                  <span className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      ANY
+                    </Badge>
+                    <span>Accept any category</span>
+                  </span>
+                </SelectItem>
+                {majorCategories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Minor Category */}
+          <div className="space-y-2">
+            <Label htmlFor="minor-category">Minor Category</Label>
+            <Select
+              value={minorCategory}
+              onValueChange={setMinorCategory}
+              disabled={majorCategory === 'any'}
+            >
+              <SelectTrigger id="minor-category">
+                <SelectValue placeholder="Select minor category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">
+                  <span className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      ANY
+                    </Badge>
+                    <span>Accept any category</span>
+                  </span>
+                </SelectItem>
+                {minorCategories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {majorCategory === 'any' && (
+              <p className="text-xs text-muted-foreground">
+                Select a major category first
+              </p>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Item Codes Tab */}
+        <TabsContent value="items" className="space-y-4 mt-4">
+          {/* Add Item Code */}
+          <div className="space-y-2">
+            <Label>Add Item Code</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter item code (e.g., ITEM-001)"
+                value={newItemCode}
+                onChange={(e) => setNewItemCode(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addItemCode()}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={addItemCode}
+                disabled={!newItemCode.trim()}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Current Item Codes */}
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">
+              Allowed Item Codes ({itemCodes.length})
+            </Label>
+            {itemCodes.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic py-2">
+                No item codes added
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-2 border rounded-md">
+                {itemCodes.map((code) => (
+                  <Badge
+                    key={code}
+                    variant="secondary"
+                    className="flex items-center gap-1 pr-1"
+                  >
+                    {code}
+                    <button
+                      type="button"
+                      onClick={() => removeItemCode(code)}
+                      className="ml-1 hover:bg-muted rounded-full p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Info */}
           <p className="text-xs text-muted-foreground">
-            Select a major category first
+            Only these specific item codes will be allowed in this location.
+            {majorCategory !== 'any' && (
+              <> Items matching category will also be allowed (OR logic).</>
+            )}
           </p>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Summary */}
+      {(majorCategory !== 'any' || itemCodes.length > 0) && (
+        <div className="p-3 bg-muted rounded-md">
+          <p className="text-xs font-medium mb-1">Current Restrictions:</p>
+          <div className="flex flex-wrap gap-1">
+            {majorCategory !== 'any' && (
+              <Badge variant="secondary" className="text-xs">
+                Category: {majorCategory}
+                {minorCategory !== 'any' && ` / ${minorCategory}`}
+              </Badge>
+            )}
+            {itemCodes.length > 0 && (
+              <Badge variant="outline" className="text-xs">
+                {itemCodes.length} item code{itemCodes.length > 1 ? 's' : ''}
+              </Badge>
+            )}
+          </div>
+          {majorCategory !== 'any' && itemCodes.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Items matching either will be allowed
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (
-        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
-          <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
-          <p className="text-sm text-red-800">{error}</p>
+        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-md dark:bg-red-950 dark:border-red-900">
+          <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
+          <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
         </div>
       )}
 

@@ -18,15 +18,22 @@ import type {
 // ============================================================
 
 /**
- * Get expected materials for a component from items table
+ * Expected materials with optional item codes
+ */
+export interface ExpectedMaterialsWithCodes extends ExpectedMaterials {
+  item_codes?: string[];
+}
+
+/**
+ * Get expected materials and item codes for a component from items table
  */
 export async function getComponentExpectedMaterials(
   itemId: string
-): Promise<ExpectedMaterials | null> {
+): Promise<ExpectedMaterialsWithCodes | null> {
   try {
     const { data, error } = await supabase
       .from("items")
-      .select("expected_major_category, expected_minor_category")
+      .select("expected_major_category, expected_minor_category, expected_item_codes")
       .eq("id", itemId)
       .maybeSingle();
 
@@ -42,6 +49,7 @@ export async function getComponentExpectedMaterials(
     return {
       major_category: data.expected_major_category || undefined,
       minor_category: data.expected_minor_category || undefined,
+      item_codes: data.expected_item_codes || undefined,
     };
   } catch (error) {
     console.error("Error fetching expected materials:", error);
@@ -50,12 +58,13 @@ export async function getComponentExpectedMaterials(
 }
 
 /**
- * Update expected materials for a component in items table
+ * Update expected materials and item codes for a component in items table
  * Automatically refreshes MV via trigger
  */
 export async function updateComponentExpectedMaterials(
   itemId: string,
-  expected: ExpectedMaterials
+  expected: ExpectedMaterials,
+  itemCodes?: string[]
 ): Promise<boolean> {
   try {
     const { error } = await supabase
@@ -63,6 +72,7 @@ export async function updateComponentExpectedMaterials(
       .update({
         expected_major_category: expected.major_category || null,
         expected_minor_category: expected.minor_category || null,
+        expected_item_codes: itemCodes && itemCodes.length > 0 ? itemCodes : null,
       })
       .eq("id", itemId);
 
@@ -80,7 +90,7 @@ export async function updateComponentExpectedMaterials(
 }
 
 /**
- * Delete expected materials for a component
+ * Delete expected materials and item codes for a component
  */
 export async function deleteComponentExpectedMaterials(
   itemId: string
@@ -91,6 +101,7 @@ export async function deleteComponentExpectedMaterials(
       .update({
         expected_major_category: null,
         expected_minor_category: null,
+        expected_item_codes: null,
       })
       .eq("id", itemId);
 

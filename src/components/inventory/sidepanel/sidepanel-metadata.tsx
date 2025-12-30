@@ -12,22 +12,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ExpectedMaterialsForm } from './expected-materials-form';
 import { MaterialVarianceIndicator } from '../material-variance-indicator';
 import { ProductionLineLinks } from './production-line-links';
-import { Factory, Package } from 'lucide-react';
+import { MaterialRestrictionsEditor } from './material-restrictions-editor';
+import { Factory, Package, Layers } from 'lucide-react';
 import {
   getComponentMetadata,
 } from '@/lib/supabase/component-metadata';
 import type { ComponentMetadata } from '@/types/component-metadata';
+import type { RackItem, AnyItem } from '@/types/inventory';
 
 interface SidePanelMetadataProps {
   itemId: string;
   warehouseId: string;
   isEditMode: boolean;
+  item?: AnyItem; // Full item for advanced features
 }
 
 export function SidePanelMetadata({
   itemId,
   warehouseId,
   isEditMode,
+  item,
 }: SidePanelMetadataProps) {
   const [metadata, setMetadata] = useState<ComponentMetadata | null>(null);
   const [loading, setLoading] = useState(false);
@@ -66,31 +70,54 @@ export function SidePanelMetadata({
     );
   }
 
+  // Check if item is a rack for advanced restrictions
+  const isRack = item?.type === 'rack';
+
   return (
     <div className="space-y-4">
-      {/* Expected Materials */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Expected Materials
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Define what material types should be stored here
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ExpectedMaterialsForm
-            itemId={itemId}
-            currentExpected={{
-              major_category: metadata?.expected_major_category,
-              minor_category: metadata?.expected_minor_category,
-            }}
-            onSave={handleExpectedMaterialsChange}
-            isEditMode={isEditMode}
-          />
-        </CardContent>
-      </Card>
+      {/* Expected Materials (Simple) or Material Restrictions (Advanced for Racks) */}
+      {isRack && item && isEditMode ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Layers className="h-4 w-4" />
+              Material Restrictions
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Configure material restrictions at item, floor, or cell level
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <MaterialRestrictionsEditor
+              item={item as RackItem}
+              onUpdate={handleExpectedMaterialsChange}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Expected Materials
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Define what material types should be stored here
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ExpectedMaterialsForm
+              itemId={itemId}
+              currentExpected={{
+                major_category: metadata?.expected_major_category,
+                minor_category: metadata?.expected_minor_category,
+              }}
+              onSave={handleExpectedMaterialsChange}
+              isEditMode={isEditMode}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Material Variance */}
       {metadata?.expected_major_category && (

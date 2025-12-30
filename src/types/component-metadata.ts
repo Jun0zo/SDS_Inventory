@@ -121,6 +121,11 @@ export interface ComponentMetadataSummary {
 // ============================================================
 
 /**
+ * Active filter mode - determines what information to display
+ */
+export type FilterMode = 'none' | 'batch' | 'production_line' | 'unassigned';
+
+/**
  * Filter options for zone layout components
  */
 export interface ComponentFilters {

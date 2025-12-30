@@ -22,6 +22,7 @@ import {
   Square,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { FilterMode } from '@/types/component-metadata';
 
 export function ZonesLayoutPage() {
   const {
@@ -59,6 +60,9 @@ export function ZonesLayoutPage() {
   // Zone state
   const [availableZones, setAvailableZones] = useState<string[]>([]);
   const hasZones = availableZones.length > 0;
+
+  // Filter mode state
+  const [filterMode, setFilterMode] = useState<FilterMode>('none');
 
   // Load component metadata when zone changes
   useEffect(() => {
@@ -356,7 +360,7 @@ export function ZonesLayoutPage() {
 
         {/* Canvas */}
         <div className="flex-1 overflow-hidden relative">
-          <Canvas />
+          <Canvas filterMode={filterMode} />
 
           {/* Filter Toolbar */}
           {singleWmsWarehouse && currentZone && (
@@ -366,6 +370,8 @@ export function ZonesLayoutPage() {
                 onFiltersChange={setFilters}
                 activeCount={hasActiveFilters ? highlightedItems.length : undefined}
                 totalCount={items.length}
+                filterMode={filterMode}
+                onFilterModeChange={setFilterMode}
               />
             </div>
           )}
@@ -374,7 +380,6 @@ export function ZonesLayoutPage() {
           {singleWmsWarehouse && currentZone && (
             <UnassignedLocationsPanel
               warehouseCode={singleWmsWarehouse.code}
-              zone={currentZone}
               isEditMode={isEditMode}
             />
           )}
