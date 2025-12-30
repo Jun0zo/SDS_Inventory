@@ -19,6 +19,59 @@ export interface LocationInventorySummary {
   stock_breakdown?: StockStatusBreakdown; // Batch breakdown
 }
 
+// Calculate batch breakdown from WMS/SAP data
+const calculateBatchBreakdown = async (
+  _warehouseCode: string,
+  location: string
+): Promise<StockStatusBreakdown> => {
+  try {
+    // Query SAP data for this location (has unrestricted/QC/blocked breakdown)
+    const { data: sapData, error: sapError } = await supabase
+      .from('sap_raw_rows')
+      .select('unrestricted_qty, quality_inspection_qty, blocked_qty')
+      .eq('storage_location', location);
+
+    if (!sapError && sapData && sapData.length > 0) {
+      // Aggregate SAP quantities
+      const breakdown = sapData.reduce((acc, row) => ({
+        available: acc.available + (row.unrestricted_qty || 0),
+        qc: acc.qc + (row.quality_inspection_qty || 0),
+        blocked: acc.blocked + (row.blocked_qty || 0),
+      }), { available: 0, qc: 0, blocked: 0 });
+
+      return breakdown;
+    }
+
+    // Fallback to WMS data (no detailed breakdown, treat all as available)
+    const { data: wmsData, error: wmsError } = await supabase
+      .from('wms_raw_rows')
+      .select('available_qty, item_status')
+      .eq('cell_no', location);
+
+    if (!wmsError && wmsData && wmsData.length > 0) {
+      // Simple approximation: use available_qty and item_status
+      const breakdown = wmsData.reduce((acc, row) => {
+        const qty = row.available_qty || 0;
+        if (row.item_status?.includes('QC') || row.item_status?.includes('검사')) {
+          acc.qc += qty;
+        } else if (row.item_status?.includes('BLOCK') || row.item_status?.includes('블락')) {
+          acc.blocked += qty;
+        } else {
+          acc.available += qty;
+        }
+        return acc;
+      }, { available: 0, qc: 0, blocked: 0 });
+
+      return breakdown;
+    }
+
+    return { available: 0, qc: 0, blocked: 0 };
+  } catch (error) {
+    console.error('Failed to calculate batch breakdown:', error);
+    return { available: 0, qc: 0, blocked: 0 };
+  }
+};
+
 // Direct MV query functions (no caching)
 export const fetchLocationInventoryDirect = async (
   warehouseCode: string,
@@ -56,6 +109,9 @@ export const fetchLocationInventoryDirect = async (
 
     const item = data[0]; // Get first (and should be only) result
 
+    // Fetch batch breakdown data
+    const stockBreakdown = await calculateBatchBreakdown(warehouseCode, location);
+
     return {
       location: item.item_location,
       zone: item.item_zone || '',
@@ -64,7 +120,9 @@ export const fetchLocationInventoryDirect = async (
       items: item.items_json || [],
       max_capacity: item.max_capacity,
       utilization_percentage: item.utilization_percentage,
-      current_stock_count: item.current_stock_count
+      current_stock_count: item.current_stock_count,
+      stock_status: item.stock_status,
+      stock_breakdown: stockBreakdown
     };
   } catch (error) {
     console.error('Failed to fetch location inventory:', error);
@@ -95,6 +153,15 @@ export const fetchMultipleLocationsDirect = async (
     }
 
     const result: Record<string, LocationInventorySummary> = {};
+
+    // Fetch batch breakdown for all locations in parallel
+    const breakdownPromises = locations.map(loc => calculateBatchBreakdown(warehouseCode, loc));
+    const breakdowns = await Promise.all(breakdownPromises);
+    const breakdownMap: Record<string, StockStatusBreakdown> = {};
+    locations.forEach((loc, idx) => {
+      breakdownMap[loc] = breakdowns[idx];
+    });
+
     data?.forEach(item => {
       result[item.item_location] = {
         location: item.item_location,
@@ -104,7 +171,9 @@ export const fetchMultipleLocationsDirect = async (
         items: item.items_json || [],
         max_capacity: item.max_capacity,
         utilization_percentage: item.utilization_percentage,
-        current_stock_count: item.current_stock_count
+        current_stock_count: item.current_stock_count,
+        stock_status: item.stock_status,
+        stock_breakdown: breakdownMap[item.item_location] || { available: 0, qc: 0, blocked: 0 }
       };
     });
 

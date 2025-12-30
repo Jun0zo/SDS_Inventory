@@ -12,8 +12,13 @@ import { validateItem } from '@/lib/validation';
 import { logActivity } from '@/lib/supabase/layouts';
 import { toast } from '@/hooks/use-toast';
 import { wouldCollide } from '@/lib/geometry';
+import { FilterMode } from '@/types/component-metadata';
 
-export function Canvas() {
+interface CanvasProps {
+  filterMode?: FilterMode;
+}
+
+export function Canvas({ filterMode = 'none' }: CanvasProps = {}) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const {
     items,
@@ -542,6 +547,7 @@ export function Canvas() {
                 onSelect={() => handleItemClick(item)}
                 inventory={inventoryWithLoading}
                 isDimmed={isDimmed}
+                filterMode={filterMode}
               />
             );
           })}

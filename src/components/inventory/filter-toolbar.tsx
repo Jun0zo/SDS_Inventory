@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Package, AlertTriangle, Factory, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import type { ComponentFilters } from '@/types/component-metadata';
+import type { ComponentFilters, FilterMode } from '@/types/component-metadata';
 
 interface FilterToolbarProps {
   filters: ComponentFilters;
@@ -20,6 +20,8 @@ interface FilterToolbarProps {
   activeCount?: number;        // Number of items passing filters
   totalCount?: number;          // Total number of items
   className?: string;
+  filterMode?: FilterMode;      // Current active filter mode
+  onFilterModeChange?: (mode: FilterMode) => void;
 }
 
 export function FilterToolbar({
@@ -28,6 +30,8 @@ export function FilterToolbar({
   activeCount,
   totalCount,
   className,
+  filterMode = 'none',
+  onFilterModeChange,
 }: FilterToolbarProps) {
   const hasActiveFilters =
     filters.showOnlyWithUnassigned ||
@@ -51,80 +55,91 @@ export function FilterToolbar({
 
       {/* Icon-only filter buttons */}
       <div className="flex items-center gap-0.5">
-        {/* Unassigned Locations */}
+        {/* Batch Status Filter */}
         <Button
-          onClick={() =>
-            onFiltersChange({
-              ...filters,
-              showOnlyWithUnassigned: !filters.showOnlyWithUnassigned,
-            })
-          }
+          onClick={() => {
+            const newMode = filterMode === 'batch' ? 'none' : 'batch';
+            if (onFilterModeChange) {
+              onFilterModeChange(newMode);
+            }
+          }}
           size="sm"
-          variant={filters.showOnlyWithUnassigned ? 'default' : 'outline'}
+          variant={filterMode === 'batch' ? 'default' : 'outline'}
           className={cn(
             'h-7 w-7 p-0 transition-all',
-            filters.showOnlyWithUnassigned
-              ? 'bg-orange-600 hover:bg-orange-700 text-white border-orange-600'
-              : 'hover:bg-orange-50 hover:border-orange-300'
+            filterMode === 'batch'
+              ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-600'
+              : 'hover:bg-purple-50 hover:border-purple-300'
           )}
-          title="Unassigned Locations"
-        >
-          <Package className="h-3.5 w-3.5" />
-        </Button>
-
-        {/* Material Variance */}
-        <Button
-          onClick={() =>
-            onFiltersChange({
-              ...filters,
-              showOnlyWithVariance: !filters.showOnlyWithVariance,
-            })
-          }
-          size="sm"
-          variant={filters.showOnlyWithVariance ? 'default' : 'outline'}
-          className={cn(
-            'h-7 w-7 p-0 transition-all',
-            filters.showOnlyWithVariance
-              ? 'bg-red-600 hover:bg-red-700 text-white border-red-600'
-              : 'hover:bg-red-50 hover:border-red-300'
-          )}
-          title="Material Mismatch"
+          title="배치 상태 (가용/QC/블락)"
         >
           <AlertTriangle className="h-3.5 w-3.5" />
         </Button>
 
-        {/* Production Lines */}
+        {/* Unassigned Locations */}
         <Button
-          onClick={() =>
+          onClick={() => {
+            const newMode = filterMode === 'unassigned' ? 'none' : 'unassigned';
+            if (onFilterModeChange) {
+              onFilterModeChange(newMode);
+            }
             onFiltersChange({
               ...filters,
-              showOnlyWithProductionLines: !filters.showOnlyWithProductionLines,
-            })
-          }
+              showOnlyWithUnassigned: newMode === 'unassigned',
+            });
+          }}
           size="sm"
-          variant={filters.showOnlyWithProductionLines ? 'default' : 'outline'}
+          variant={filterMode === 'unassigned' ? 'default' : 'outline'}
           className={cn(
             'h-7 w-7 p-0 transition-all',
-            filters.showOnlyWithProductionLines
+            filterMode === 'unassigned'
+              ? 'bg-orange-600 hover:bg-orange-700 text-white border-orange-600'
+              : 'hover:bg-orange-50 hover:border-orange-300'
+          )}
+          title="미할당 위치"
+        >
+          <Package className="h-3.5 w-3.5" />
+        </Button>
+
+        {/* Production Lines */}
+        <Button
+          onClick={() => {
+            const newMode = filterMode === 'production_line' ? 'none' : 'production_line';
+            if (onFilterModeChange) {
+              onFilterModeChange(newMode);
+            }
+            onFiltersChange({
+              ...filters,
+              showOnlyWithProductionLines: newMode === 'production_line',
+            });
+          }}
+          size="sm"
+          variant={filterMode === 'production_line' ? 'default' : 'outline'}
+          className={cn(
+            'h-7 w-7 p-0 transition-all',
+            filterMode === 'production_line'
               ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600'
               : 'hover:bg-blue-50 hover:border-blue-300'
           )}
-          title="Feeding Production Lines"
+          title="생산 라인 정보"
         >
           <Factory className="h-3.5 w-3.5" />
         </Button>
       </div>
 
       {/* Clear all button */}
-      {hasActiveFilters && (
+      {(hasActiveFilters || filterMode !== 'none') && (
         <Button
-          onClick={() =>
+          onClick={() => {
+            if (onFilterModeChange) {
+              onFilterModeChange('none');
+            }
             onFiltersChange({
               showOnlyWithUnassigned: false,
               showOnlyWithVariance: false,
               showOnlyWithProductionLines: false,
-            })
-          }
+            });
+          }}
           size="sm"
           variant="ghost"
           className="h-7 w-7 p-0 text-xs"

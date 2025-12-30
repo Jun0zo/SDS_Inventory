@@ -8,19 +8,21 @@ import { Package, RefreshCw, AlertTriangle, Factory } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { Badge } from '@/components/ui/badge';
+import { FilterMode } from '@/types/component-metadata';
 
 interface ItemViewProps {
   item: AnyItem;
   onSelect: () => void;
   inventory?: LocationInventorySummary | null;
   isDimmed?: boolean;
+  filterMode?: FilterMode;
 }
 
 interface InventoryWithLoading extends LocationInventorySummary {
   loading?: boolean;
 }
 
-export function ItemView({ item, onSelect, inventory, isDimmed = false }: ItemViewProps) {
+export function ItemView({ item, onSelect, inventory, isDimmed = false, filterMode = 'none' }: ItemViewProps) {
   const { grid, selectedIds, isEditMode, updateItem, componentsMetadata } = useZoneStore();
   const isSelected = selectedIds.includes(item.id);
 
@@ -232,8 +234,53 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false }: ItemVi
             </div>
           </div>
 
-          {/* Inventory Overlay - Always show if capacity > 0 */}
-          {capacity > 0 && (
+          {/* Filter-specific content */}
+          {filterMode === 'batch' && inventory?.stock_breakdown && (
+            <div className="mt-1 pt-1 border-t space-y-1">
+              <div className="text-[10px] text-muted-foreground">배치 상태</div>
+              <div className="flex flex-col gap-0.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-green-600">가용</span>
+                  <span className="font-medium text-green-600">{inventory.stock_breakdown.available}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-yellow-600">QC</span>
+                  <span className="font-medium text-yellow-600">{inventory.stock_breakdown.qc}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-red-600">블락</span>
+                  <span className="font-medium text-red-600">{inventory.stock_breakdown.blocked}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {filterMode === 'production_line' && itemMetadata?.production_line_count && itemMetadata.production_line_count > 0 && (
+            <div className="mt-1 pt-1 border-t">
+              <div className="text-[10px] text-muted-foreground mb-1">생산 라인</div>
+              <div className="flex items-center gap-1">
+                <Factory className="h-3 w-3 text-blue-600" />
+                <span className="text-xs font-medium text-blue-600">
+                  {itemMetadata.production_line_count}개 라인 공급
+                </span>
+              </div>
+            </div>
+          )}
+
+          {filterMode === 'unassigned' && itemMetadata?.has_unassigned_locations && (
+            <div className="mt-1 pt-1 border-t">
+              <div className="text-[10px] text-muted-foreground mb-1">미할당 위치</div>
+              <div className="flex items-center gap-1">
+                <Package className="h-3 w-3 text-orange-600" />
+                <span className="text-xs font-medium text-orange-600">
+                  {itemMetadata.unassigned_locations_count}개 위치
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Default: Show capacity/utilization when no filter is active */}
+          {filterMode === 'none' && capacity > 0 && (
             <div className="mt-1 pt-1 border-t">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-medium" style={{ color: utilizationColor }}>
