@@ -5,8 +5,7 @@
 
 export interface CellLocation {
   floor: number;
-  row: number;
-  col: number;
+  cell: number; // Cell index (horizontal position, 0-indexed)
 }
 
 export interface InventoryItem {
@@ -33,7 +32,8 @@ export interface CellOccupancy {
 
 /**
  * Parse cell location string like "A35-01-02" or "01-02"
- * Returns floor (1-indexed), row, and col (0-indexed)
+ * Returns floor and cell (both 0-indexed)
+ * Format: "rack-floor-cell" where floor and cell are 1-indexed in the string
  */
 export function parseCellLocation(cellNo: string): CellLocation | null {
   if (!cellNo) return null;
@@ -42,26 +42,24 @@ export function parseCellLocation(cellNo: string): CellLocation | null {
   const parts = cellNo.split('-');
 
   if (parts.length === 2) {
-    // Format: "floor-col" (assuming single row)
+    // Format: "floor-cell"
     const floor = parseInt(parts[0], 10);
-    const col = parseInt(parts[1], 10);
-    if (!isNaN(floor) && !isNaN(col)) {
+    const cell = parseInt(parts[1], 10);
+    if (!isNaN(floor) && !isNaN(cell)) {
       return {
         floor: floor - 1, // Convert to 0-indexed
-        row: 0,
-        col: col - 1, // Convert to 0-indexed
+        cell: cell - 1, // Convert to 0-indexed
       };
     }
   } else if (parts.length === 3) {
-    // Format: "rack-floor-col" or could be "floor-row-col"
-    // First part might be rack code (like "A35"), try parsing last two
+    // Format: "rack-floor-cell" (e.g., "A35-01-02")
+    // First part is rack code (like "A35"), parse last two
     const floor = parseInt(parts[1], 10);
-    const col = parseInt(parts[2], 10);
-    if (!isNaN(floor) && !isNaN(col)) {
+    const cell = parseInt(parts[2], 10);
+    if (!isNaN(floor) && !isNaN(cell)) {
       return {
         floor: floor - 1, // Convert to 0-indexed
-        row: 0,
-        col: col - 1, // Convert to 0-indexed
+        cell: cell - 1, // Convert to 0-indexed
       };
     }
   }
@@ -71,7 +69,7 @@ export function parseCellLocation(cellNo: string): CellLocation | null {
 
 /**
  * Map inventory items to cell grid structure
- * Returns a map of "floor-row-col" -> items array
+ * Returns a map of "floor-cell" -> items array
  */
 export function mapInventoryToCells(
   items: InventoryItem[]
@@ -84,7 +82,7 @@ export function mapInventoryToCells(
     const location = parseCellLocation(item.cell_no);
     if (!location) continue;
 
-    const key = `${location.floor}-${location.row}-${location.col}`;
+    const key = `${location.floor}-${location.cell}`;
 
     if (!cellMap.has(key)) {
       cellMap.set(key, []);
@@ -100,12 +98,12 @@ export function mapInventoryToCells(
  */
 export function calculateCellOccupancy(
   floor: number,
-  row: number,
-  col: number,
+  cell: number,
+  _unused: number, // Kept for backward compatibility, will be removed
   cellMap: Map<string, InventoryItem[]>,
   capacity: number
 ): CellOccupancy {
-  const key = `${floor}-${row}-${col}`;
+  const key = `${floor}-${cell}`;
   const items = cellMap.get(key) || [];
   const actualUldCount = items.length;
 

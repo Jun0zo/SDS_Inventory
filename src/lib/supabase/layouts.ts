@@ -152,21 +152,50 @@ export async function getLayoutByWarehouseZone(
       rotation: dbItem.rotation,
       w: dbItem.w,
       h: dbItem.h,
+      zoneType: dbItem.zone_type || 'standard',
     };
 
     if (dbItem.type === 'rack') {
+      // Migration: Use cols as the number of cells per floor (horizontal)
+      // Old structure: rows=1, cols=10 meant 1 row with 10 columns
+      // New structure: rows=10 means 10 cells per floor (horizontal)
+      const cellsPerFloor = dbItem.cols || dbItem.rows || 1;
+
+      // Migrate cellAvailability from [floor][row][col] to [floor][cell]
+      let migratedCellAvailability = dbItem.cell_availability;
+      if (migratedCellAvailability && Array.isArray(migratedCellAvailability[0]?.[0])) {
+        // Old 3D structure - flatten to 2D
+        migratedCellAvailability = migratedCellAvailability.map((floor: boolean[][]) =>
+          floor.flatMap((row: boolean[]) => row)
+        );
+      }
+
+      // Migrate cellCapacity from [floor][row][col] to [floor][cell]
+      let migratedCellCapacity = dbItem.cell_capacity;
+      if (migratedCellCapacity && Array.isArray(migratedCellCapacity[0]?.[0])) {
+        // Old 3D structure - flatten to 2D
+        migratedCellCapacity = migratedCellCapacity.map((floor: number[][]) =>
+          floor.flatMap((row: number[]) => row)
+        );
+      }
+
+      // Convert old numbering values
+      let numbering = dbItem.numbering;
+      if (numbering === 'col-major' || numbering === 'row-major') {
+        numbering = 'left-to-right'; // Default to left-to-right
+      }
+
       return {
         ...baseItem,
         type: 'rack',
         floors: dbItem.floors,
-        rows: dbItem.rows,
-        cols: dbItem.cols,
-        numbering: dbItem.numbering,
+        rows: cellsPerFloor,
+        numbering,
         order: dbItem.order_dir,
         perFloorLocations: dbItem.per_floor_locations,
         floorCapacities: dbItem.floor_capacities || undefined,
-        cellAvailability: dbItem.cell_availability || undefined,
-        cellCapacity: dbItem.cell_capacity || undefined,
+        cellAvailability: migratedCellAvailability || undefined,
+        cellCapacity: migratedCellCapacity || undefined,
         pillarAvailability: dbItem.pillar_availability || undefined,
       } as AnyItem;
     } else {
@@ -283,34 +312,29 @@ export async function createOrUpdateLayout(params: {
         w: item.w,
         h: item.h,
         rows: item.rows,
-        cols: item.cols,
+        cols: item.type === 'flat' ? (item as any).cols : item.rows, // For flat items, keep cols; for rack, store rows as cols for DB compatibility
+        zone_type: item.zoneType || 'standard',
       };
 
       if (item.type === 'rack') {
-        // Validate and resize cellCapacity if dimensions changed
+        // Validate and resize cellCapacity if dimensions changed (2D structure: [floor][cell])
         let cellCapacity = item.cellCapacity;
-        
-        if (!cellCapacity || 
+
+        if (!cellCapacity ||
             cellCapacity.length !== item.floors ||
-            cellCapacity[0]?.length !== item.rows ||
-            cellCapacity[0]?.[0]?.length !== item.cols) {
+            cellCapacity[0]?.length !== item.rows) {
           // Resize or initialize cellCapacity to match current dimensions
           cellCapacity = Array.from({ length: item.floors }, (_, f) =>
-            Array.from({ length: item.rows }, (_, r) =>
-              Array.from({ length: item.cols }, (_, c) => {
-                // Preserve existing capacity if available, otherwise default to 1
-                return item.cellCapacity?.[f]?.[r]?.[c] ?? 1;
-              })
-            )
+            Array.from({ length: item.rows }, (_, c) => {
+              // Preserve existing capacity if available, otherwise default to 1
+              return item.cellCapacity?.[f]?.[c] ?? 1;
+            })
           );
         }
 
-        // Calculate floor_capacities from cellCapacity to ensure sync
-        const floorCapacities = cellCapacity.map((floor) =>
-          floor.reduce((sum, row) =>
-            sum + row.reduce((rowSum, cap) => rowSum + cap, 0),
-            0
-          )
+        // Calculate floor_capacities from cellCapacity (2D structure)
+        const floorCapacities = cellCapacity?.map((floor) =>
+          floor.reduce((sum, cap) => sum + cap, 0)
         );
 
         return {
@@ -703,21 +727,46 @@ export async function getLayoutByZone(zoneCode: string): Promise<{ layout: Layou
       rotation: dbItem.rotation,
       w: dbItem.w,
       h: dbItem.h,
+      zoneType: dbItem.zone_type || 'standard',
     };
 
     if (dbItem.type === 'rack') {
+      // Migration: Use cols as the number of cells per floor (horizontal)
+      const cellsPerFloor = dbItem.cols || dbItem.rows || 1;
+
+      // Migrate cellAvailability from [floor][row][col] to [floor][cell]
+      let migratedCellAvailability = dbItem.cell_availability;
+      if (migratedCellAvailability && Array.isArray(migratedCellAvailability[0]?.[0])) {
+        migratedCellAvailability = migratedCellAvailability.map((floor: boolean[][]) =>
+          floor.flatMap((row: boolean[]) => row)
+        );
+      }
+
+      // Migrate cellCapacity from [floor][row][col] to [floor][cell]
+      let migratedCellCapacity = dbItem.cell_capacity;
+      if (migratedCellCapacity && Array.isArray(migratedCellCapacity[0]?.[0])) {
+        migratedCellCapacity = migratedCellCapacity.map((floor: number[][]) =>
+          floor.flatMap((row: number[]) => row)
+        );
+      }
+
+      // Convert old numbering values
+      let numbering = dbItem.numbering;
+      if (numbering === 'col-major' || numbering === 'row-major') {
+        numbering = 'left-to-right';
+      }
+
       return {
         ...baseItem,
         type: 'rack',
         floors: dbItem.floors,
-        rows: dbItem.rows,
-        cols: dbItem.cols,
-        numbering: dbItem.numbering,
+        rows: cellsPerFloor,
+        numbering,
         order: dbItem.order_dir,
         perFloorLocations: dbItem.per_floor_locations,
         floorCapacities: dbItem.floor_capacities || undefined,
-        cellAvailability: dbItem.cell_availability || undefined,
-        cellCapacity: dbItem.cell_capacity || undefined,
+        cellAvailability: migratedCellAvailability || undefined,
+        cellCapacity: migratedCellCapacity || undefined,
         pillarAvailability: dbItem.pillar_availability || undefined,
       } as AnyItem;
     } else {

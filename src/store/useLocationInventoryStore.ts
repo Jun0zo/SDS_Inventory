@@ -19,53 +19,77 @@ export interface LocationInventorySummary {
   stock_breakdown?: StockStatusBreakdown; // Batch breakdown
 }
 
-// Calculate batch breakdown from WMS/SAP data
+// Calculate batch breakdown by matching WMS item_code with SAP material
+// SAP has the actual batch breakdown: unrestricted_qty, quality_inspection_qty, blocked_qty
 const calculateBatchBreakdown = async (
-  _warehouseCode: string,
-  location: string
+  _warehouseCode: string, // Reserved for future warehouse filtering
+  location: string,
+  itemType?: string
 ): Promise<StockStatusBreakdown> => {
   try {
-    // Query SAP data for this location (has unrestricted/QC/blocked breakdown)
+    if (!supabase) {
+      return { available: 0, qc: 0, blocked: 0 };
+    }
+
+    // Step 1: Get item_codes from WMS for this location
+    let wmsQuery = supabase
+      .from('wms_raw_rows')
+      .select('item_code')
+      .not('item_code', 'is', null);
+
+    // For rack items, use pattern matching (location "A35" matches "A35-01-01")
+    // For flat items, use exact match
+    if (itemType === 'rack') {
+      wmsQuery = wmsQuery.ilike('cell_no', `${location}-%`);
+    } else {
+      wmsQuery = wmsQuery.ilike('cell_no', location);
+    }
+
+    const { data: wmsData, error: wmsError } = await wmsQuery;
+
+    if (wmsError) {
+      console.error('WMS query error:', wmsError);
+      return { available: 0, qc: 0, blocked: 0 };
+    }
+
+    if (!wmsData || wmsData.length === 0) {
+      return { available: 0, qc: 0, blocked: 0 };
+    }
+
+    // Get unique item_codes
+    const itemCodes = [...new Set(wmsData.map(row => row.item_code).filter(Boolean))];
+
+    if (itemCodes.length === 0) {
+      return { available: 0, qc: 0, blocked: 0 };
+    }
+
+    // Step 2: Get SAP batch breakdown for these item_codes (material = item_code)
     const { data: sapData, error: sapError } = await supabase
       .from('sap_raw_rows')
-      .select('unrestricted_qty, quality_inspection_qty, blocked_qty')
-      .eq('storage_location', location);
+      .select('material, unrestricted_qty, quality_inspection_qty, blocked_qty')
+      .in('material', itemCodes);
 
-    if (!sapError && sapData && sapData.length > 0) {
-      // Aggregate SAP quantities
-      const breakdown = sapData.reduce((acc, row) => ({
-        available: acc.available + (row.unrestricted_qty || 0),
-        qc: acc.qc + (row.quality_inspection_qty || 0),
-        blocked: acc.blocked + (row.blocked_qty || 0),
-      }), { available: 0, qc: 0, blocked: 0 });
-
-      return breakdown;
+    if (sapError) {
+      console.error('SAP query error:', sapError);
+      return { available: 0, qc: 0, blocked: 0 };
     }
 
-    // Fallback to WMS data (no detailed breakdown, treat all as available)
-    const { data: wmsData, error: wmsError } = await supabase
-      .from('wms_raw_rows')
-      .select('available_qty, item_status')
-      .eq('cell_no', location);
-
-    if (!wmsError && wmsData && wmsData.length > 0) {
-      // Simple approximation: use available_qty and item_status
-      const breakdown = wmsData.reduce((acc, row) => {
-        const qty = row.available_qty || 0;
-        if (row.item_status?.includes('QC') || row.item_status?.includes('검사')) {
-          acc.qc += qty;
-        } else if (row.item_status?.includes('BLOCK') || row.item_status?.includes('블락')) {
-          acc.blocked += qty;
-        } else {
-          acc.available += qty;
-        }
-        return acc;
-      }, { available: 0, qc: 0, blocked: 0 });
-
-      return breakdown;
+    if (!sapData || sapData.length === 0) {
+      // No SAP data - return WMS quantities as all available
+      const wmsTotal = wmsData.length; // Count of items
+      return { available: wmsTotal, qc: 0, blocked: 0 };
     }
 
-    return { available: 0, qc: 0, blocked: 0 };
+    // Step 3: Count batches by status (not sum of quantities)
+    const breakdown = sapData.reduce((acc, row) => {
+      // Count each row as 1 batch based on which qty field has value
+      if (Number(row.unrestricted_qty) > 0) acc.available += 1;
+      if (Number(row.quality_inspection_qty) > 0) acc.qc += 1;
+      if (Number(row.blocked_qty) > 0) acc.blocked += 1;
+      return acc;
+    }, { available: 0, qc: 0, blocked: 0 });
+
+    return breakdown;
   } catch (error) {
     console.error('Failed to calculate batch breakdown:', error);
     return { available: 0, qc: 0, blocked: 0 };
@@ -109,8 +133,8 @@ export const fetchLocationInventoryDirect = async (
 
     const item = data[0]; // Get first (and should be only) result
 
-    // Fetch batch breakdown data
-    const stockBreakdown = await calculateBatchBreakdown(warehouseCode, location);
+    // Fetch batch breakdown data (pass item type for proper location matching)
+    const stockBreakdown = await calculateBatchBreakdown(warehouseCode, location, item.type);
 
     return {
       location: item.item_location,
@@ -154,8 +178,16 @@ export const fetchMultipleLocationsDirect = async (
 
     const result: Record<string, LocationInventorySummary> = {};
 
-    // Fetch batch breakdown for all locations in parallel
-    const breakdownPromises = locations.map(loc => calculateBatchBreakdown(warehouseCode, loc));
+    // Build a map of location -> type from MV data for proper batch breakdown calculation
+    const locationTypeMap: Record<string, string> = {};
+    data?.forEach(item => {
+      locationTypeMap[item.item_location] = item.type;
+    });
+
+    // Fetch batch breakdown for all locations in parallel (with correct item type)
+    const breakdownPromises = locations.map(loc =>
+      calculateBatchBreakdown(warehouseCode, loc, locationTypeMap[loc])
+    );
     const breakdowns = await Promise.all(breakdownPromises);
     const breakdownMap: Record<string, StockStatusBreakdown> = {};
     locations.forEach((loc, idx) => {

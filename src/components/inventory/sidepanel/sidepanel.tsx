@@ -384,10 +384,6 @@ export function SidePanel() {
                         <span className="text-muted-foreground">Floors:</span>{' '}
                         <span className="font-medium">{selectedItem.floors || 1}</span>
                       </div>
-                      <div>
-                        <span className="text-muted-foreground">Cols:</span>{' '}
-                        <span className="font-medium">{selectedItem.cols}</span>
-                      </div>
                     </div>
                   </div>
                 )}

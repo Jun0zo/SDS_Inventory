@@ -247,12 +247,12 @@ export async function updateFloorMaterialRestrictions(
  * Update cell-level material restrictions for an item
  * Automatically refreshes MV via trigger
  * @param itemId - Item UUID
- * @param restrictions - 3D array of material restrictions [floor][row][col]
+ * @param restrictions - 2D array of material restrictions [floor][cell]
  * @returns Success status
  */
 export async function updateCellMaterialRestrictions(
   itemId: string,
-  restrictions: (MaterialRestriction | null)[][][]
+  restrictions: (MaterialRestriction | null)[][]
 ): Promise<boolean> {
   try {
     const { error } = await supabase

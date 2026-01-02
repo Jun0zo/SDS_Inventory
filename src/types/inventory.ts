@@ -6,6 +6,9 @@ export interface MaterialRestriction {
   minor_category?: string | null;
 }
 
+// Zone type for capacity calculation
+export type ZoneType = 'standard' | 'block' | 'flex';
+
 export interface PlacedItem {
   id: string;
   type: ItemType;
@@ -14,6 +17,8 @@ export interface PlacedItem {
   x: number;
   y: number;
   rotation?: number; // 0|90|180|270 for racks
+  // Zone type: standard (normal), block (no capacity), flex (flexible area, no capacity)
+  zoneType?: ZoneType | null;
   // Item-level expected materials (lowest priority)
   expected_major_category?: string | null;
   expected_minor_category?: string | null;
@@ -24,22 +29,21 @@ export interface PlacedItem {
 export interface RackItem extends PlacedItem {
   type: 'rack';
   floors: number;
-  rows: number;
-  cols: number;
+  rows: number; // Number of cells per floor (horizontal)
   w: number;
   h: number;
   floorCapacities?: number[];
-  // [floor][row][col] - true: available, false: blocked (pillar, etc)
-  cellAvailability?: boolean[][][];
-  // [floor][row][col] - how many items can be stored in each cell (default: 1)
+  // [floor][cell] - true: available, false: blocked
+  cellAvailability?: boolean[][];
+  // [floor][cell] - how many items can be stored in each cell (default: 1)
   // If >= 2: count actual items and add to current_stock
   // If = 1: count as 1 regardless of ULDs
-  cellCapacity?: number[][][];
-  // [pillar] - true: pillar exists, false: no pillar (cols+1 pillars, shared across all floors)
+  cellCapacity?: number[][];
+  // [pillar] - true: pillar exists, false: no pillar (rows+1 pillars, shared across all floors)
   // Pillars are positioned between cells (including both ends)
   pillarAvailability?: boolean[];
-  // Numbering scheme for the rack (col-major or row-major)
-  numbering?: 'col-major' | 'row-major';
+  // Numbering scheme for the rack
+  numbering?: 'left-to-right' | 'right-to-left';
   // Order direction for numbering
   order?: string;
   // Per-floor location naming flag
@@ -47,15 +51,15 @@ export interface RackItem extends PlacedItem {
   // [floor] - material restrictions per floor
   // Priority: cell > floor > item
   floorMaterialRestrictions?: (MaterialRestriction | null)[];
-  // [floor][row][col] - material restrictions per cell
+  // [floor][cell] - material restrictions per cell
   // Priority: cell > floor > item
-  cellMaterialRestrictions?: (MaterialRestriction | null)[][][];
+  cellMaterialRestrictions?: (MaterialRestriction | null)[][];
   // [floor] - allowed item codes per floor
   // Priority: cell > floor > item
   floorItemCodes?: (string[] | null)[];
-  // [floor][row][col] - allowed item codes per cell
+  // [floor][cell] - allowed item codes per cell
   // Priority: cell > floor > item
-  cellItemCodes?: (string[] | null)[][][];
+  cellItemCodes?: (string[] | null)[][];
 }
 
 export interface FlatItem extends PlacedItem {

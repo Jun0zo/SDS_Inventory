@@ -264,8 +264,7 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
       w: 3,  // Default width: 3 grid cells for rack
       h: 6,  // Default height: 6 grid cells for rack
       floors: 5,  // Default: 5 floors for rack
-      rows: 5,  // Default: 5 rows for rack
-      cols: 2,  // Default: 2 cols (bays) for rack
+      rows: 10,  // Default: 10 cells per floor for rack
       rotation: 0,
     } : {
       id,
@@ -761,10 +760,7 @@ export const useZoneStore = create<ZoneState>((set, get) => ({
           }
         }
 
-        toast({
-          title: 'Layout loaded',
-          description: `Loaded ${items.length} items for ${state.currentWarehouseId}/${state.currentZone}`,
-        });
+        // Success - no toast needed for successful load
       } else {
         // No layout found, start with empty
         set({

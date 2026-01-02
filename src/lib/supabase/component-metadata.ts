@@ -395,22 +395,30 @@ export async function refreshComponentMetadata(): Promise<boolean> {
  */
 export async function getMajorCategories(): Promise<string[]> {
   try {
+    if (!supabase) {
+      console.warn("Supabase client not initialized - getMajorCategories");
+      return [];
+    }
+
+    // Fetch from major_categories table instead of materials
     const { data, error } = await supabase
-      .from("materials")
-      .select("major_category")
-      .not("major_category", "is", null);
+      .from("major_categories")
+      .select("name")
+      .order("display_order", { ascending: true });
 
     if (error) {
       console.error("Failed to fetch major categories:", error);
       return [];
     }
 
-    // Get unique categories
-    const categories = [...new Set(data.map((m) => m.major_category))].filter(
-      Boolean
-    ) as string[];
+    if (!data || data.length === 0) {
+      console.warn("No major categories found in major_categories table");
+      return [];
+    }
 
-    return categories.sort();
+    const categories = data.map((c) => c.name);
+    console.log("Fetched major categories:", categories.length, categories);
+    return categories;
   } catch (error) {
     console.error("Error fetching major categories:", error);
     return [];
@@ -418,35 +426,65 @@ export async function getMajorCategories(): Promise<string[]> {
 }
 
 /**
- * Get all available minor categories from materials table
- * Optionally filter by major category
+ * Get all available minor categories from minor_categories table
+ * Optionally filter by major category name
  */
 export async function getMinorCategories(
-  majorCategory?: string
+  majorCategoryName?: string
 ): Promise<string[]> {
   try {
-    let query = supabase
-      .from("materials")
-      .select("minor_category")
-      .not("minor_category", "is", null);
-
-    if (majorCategory && majorCategory !== "any") {
-      query = query.eq("major_category", majorCategory);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Failed to fetch minor categories:", error);
+    if (!supabase) {
+      console.warn("Supabase client not initialized - getMinorCategories");
       return [];
     }
 
-    // Get unique categories
-    const categories = [...new Set(data.map((m) => m.minor_category))].filter(
-      Boolean
-    ) as string[];
+    // If major category is specified, first get its ID
+    if (majorCategoryName && majorCategoryName !== "any") {
+      const { data: majorCat, error: majorError } = await supabase
+        .from("major_categories")
+        .select("id")
+        .eq("name", majorCategoryName)
+        .maybeSingle();
 
-    return categories.sort();
+      if (majorError) {
+        console.error("Failed to fetch major category ID:", majorError);
+        return [];
+      }
+
+      if (!majorCat) {
+        console.warn("Major category not found:", majorCategoryName);
+        return [];
+      }
+
+      // Fetch minor categories for this major category
+      const { data, error } = await supabase
+        .from("minor_categories")
+        .select("name")
+        .eq("major_category_id", majorCat.id)
+        .order("display_order", { ascending: true });
+
+      if (error) {
+        console.error("Failed to fetch minor categories:", error);
+        return [];
+      }
+
+      return data?.map((c) => c.name) || [];
+    } else {
+      // Fetch all minor categories
+      const { data, error } = await supabase
+        .from("minor_categories")
+        .select("name")
+        .order("display_order", { ascending: true });
+
+      if (error) {
+        console.error("Failed to fetch minor categories:", error);
+        return [];
+      }
+
+      // Get unique categories
+      const categories = [...new Set(data?.map((c) => c.name) || [])];
+      return categories;
+    }
   } catch (error) {
     console.error("Error fetching minor categories:", error);
     return [];

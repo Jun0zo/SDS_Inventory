@@ -15,6 +15,7 @@ import {
   parseCellLocation,
   InventoryItem,
 } from '@/lib/cell-inventory-mapper';
+import { calculateCapacity } from '@/lib/capacity';
 
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
@@ -43,8 +44,8 @@ interface RackGridEditorProps {
   mode: 'view' | 'edit';
   inventory?: InventorySummary | null;
   onUpdate: (updates: {
-    cellAvailability?: boolean[][][];
-    cellCapacity?: number[][][];
+    cellAvailability?: boolean[][];
+    cellCapacity?: number[][];
     pillarAvailability?: boolean[];
   }) => void;
 }
@@ -53,49 +54,43 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
   // Selected cell state for detail view
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   // Initialize cellAvailability if not exists (all cells available by default)
-  const getCellAvailability = (): boolean[][][] => {
+  const getCellAvailability = (): boolean[][] => {
     if (item.cellAvailability &&
         item.cellAvailability.length === item.floors &&
-        item.cellAvailability[0]?.length === item.rows &&
-        item.cellAvailability[0]?.[0]?.length === item.cols) {
+        item.cellAvailability[0]?.length === item.rows) {
       return item.cellAvailability;
     }
 
     // Create new grid with all cells available
     return Array.from({ length: item.floors }, () =>
-      Array.from({ length: item.rows }, () =>
-        Array.from({ length: item.cols }, () => true)
-      )
+      Array.from({ length: item.rows }, () => true)
     );
   };
 
   // Initialize cellCapacity if not exists (all cells capacity = 1 by default)
-  const getCellCapacity = (): number[][][] => {
+  const getCellCapacity = (): number[][] => {
     if (item.cellCapacity &&
         item.cellCapacity.length === item.floors &&
-        item.cellCapacity[0]?.length === item.rows &&
-        item.cellCapacity[0]?.[0]?.length === item.cols) {
+        item.cellCapacity[0]?.length === item.rows) {
       return item.cellCapacity;
     }
 
     // Create new grid with all cells capacity = 1
     return Array.from({ length: item.floors }, () =>
-      Array.from({ length: item.rows }, () =>
-        Array.from({ length: item.cols }, () => 1)
-      )
+      Array.from({ length: item.rows }, () => 1)
     );
   };
 
   // Initialize pillarAvailability if not exists (all pillars OFF by default)
   const getPillarAvailability = (): boolean[] => {
     if (item.pillarAvailability &&
-        item.pillarAvailability.length === item.cols + 1) {
+        item.pillarAvailability.length === item.rows + 1) {
       return item.pillarAvailability;
     }
 
-    // Create new array with all pillars OFF (cols+1 pillars, shared across all floors)
+    // Create new array with all pillars OFF (rows+1 pillars, shared across all floors)
     // Pillars are positioned between cells (including both ends)
-    return Array.from({ length: item.cols + 1 }, () => false);
+    return Array.from({ length: item.rows + 1 }, () => false);
   };
 
   const cellAvailability = getCellAvailability();
@@ -107,32 +102,26 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
     ? mapInventoryToCells(inventory.items)
     : new Map();
 
-  const toggleCell = (floor: number, row: number, col: number) => {
+  const toggleCell = (floor: number, cell: number) => {
     const newAvailability = cellAvailability.map((f, fi) =>
       fi === floor
-        ? f.map((r, ri) =>
-            ri === row ? r.map((c, ci) => (ci === col ? !c : c)) : r
-          )
+        ? f.map((c, ci) => (ci === cell ? !c : c))
         : f
     );
     onUpdate({ cellAvailability: newAvailability });
   };
 
-  const incrementCapacity = (floor: number, row: number, col: number, e: React.MouseEvent) => {
+  const incrementCapacity = (floor: number, cell: number, e: React.MouseEvent) => {
     e.stopPropagation();
     const newCapacity = cellCapacity.map((f, fi) =>
       fi === floor
-        ? f.map((r, ri) =>
-            ri === row
-              ? r.map((c, ci) => {
-                  if (ci === col) {
-                    // Cycle: 0 → 1 → 2 → 3 → 4 → 0
-                    return (c + 1) % 5;
-                  }
-                  return c;
-                })
-              : r
-          )
+        ? f.map((c, ci) => {
+            if (ci === cell) {
+              // Cycle: 0 → 1 → 2 → 3 → 4 → 0
+              return (c + 1) % 5;
+            }
+            return c;
+          })
         : f
     );
     onUpdate({ cellCapacity: newCapacity });
@@ -147,16 +136,12 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
 
   const resetAll = () => {
     const newAvailability = Array.from({ length: item.floors }, () =>
-      Array.from({ length: item.rows }, () =>
-        Array.from({ length: item.cols }, () => true)
-      )
+      Array.from({ length: item.rows }, () => true)
     );
     const newCapacity = Array.from({ length: item.floors }, () =>
-      Array.from({ length: item.rows }, () =>
-        Array.from({ length: item.cols }, () => 1)
-      )
+      Array.from({ length: item.rows }, () => 1)
     );
-    const newPillarAvailability = Array.from({ length: item.cols + 1 }, () => false);
+    const newPillarAvailability = Array.from({ length: item.rows + 1 }, () => false);
     onUpdate({
       cellAvailability: newAvailability,
       cellCapacity: newCapacity,
@@ -166,26 +151,24 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
 
   const getFloorStats = (floor: number) => {
     const totalCapacity = cellCapacity[floor]?.reduce(
-      (sum, row) => sum + row.reduce((rowSum, cap) => rowSum + cap, 0),
+      (sum, cap) => sum + cap,
       0
     ) || 0;
 
     // Calculate current stock for this floor
     let floorCurrentStock = 0;
     if (cellAvailability[floor]) {
-      for (let row = 0; row < item.rows; row++) {
-        for (let col = 0; col < item.cols; col++) {
-          if (cellAvailability[floor][row]?.[col]) {
-            const capacity = cellCapacity[floor]?.[row]?.[col] ?? 1;
-            const occupancy = calculateCellOccupancy(
-              floor,
-              row,
-              col,
-              cellInventoryMap,
-              capacity
-            );
-            floorCurrentStock += occupancy.currentCount;
-          }
+      for (let cell = 0; cell < item.rows; cell++) {
+        if (cellAvailability[floor][cell]) {
+          const capacity = cellCapacity[floor]?.[cell] ?? 1;
+          const occupancy = calculateCellOccupancy(
+            floor,
+            cell,
+            0, // No longer used
+            cellInventoryMap,
+            capacity
+          );
+          floorCurrentStock += occupancy.currentCount;
         }
       }
     }
@@ -193,14 +176,6 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
     return { totalCapacity, currentStock: floorCurrentStock };
   };
 
-  const getTotalMaxCapacity = () => {
-    let total = 0;
-    for (let floor = 0; floor < item.floors; floor++) {
-      const { totalCapacity } = getFloorStats(floor);
-      total += totalCapacity;
-    }
-    return total;
-  };
 
   // Get items that are not assigned to any floor in the rack
   const getUnassignedItems = () => {
@@ -222,12 +197,12 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
       }
 
       const isCellAvailable =
-        !!cellAvailability[location.floor]?.[location.row]?.[location.col];
+        !!cellAvailability[location.floor]?.[location.cell];
       if (!isCellAvailable) {
         return true;
       }
 
-      const key = `${location.floor}-${location.row}-${location.col}`;
+      const key = `${location.floor}-${location.cell}`;
       const mappedItems = cellInventoryMap.get(key) || [];
       const alreadyMapped = mappedItems.some((mapped: InventoryItem) =>
         mapped.id === invItem.id ||
@@ -252,7 +227,7 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
         <div className="flex justify-between items-center">
           <Label className="text-xs">Rack Visualization</Label>
           <div className="text-sm font-medium">
-            Total Max Capacity: {getTotalMaxCapacity()}
+            Total Max Capacity: {calculateCapacity(item)}
           </div>
         </div>
 
@@ -264,17 +239,17 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
           <div className="relative">
             {/* Pillars - rendered as background, penetrating all floors */}
             <div className="absolute inset-0 flex justify-center pointer-events-none">
-              <div className="relative" style={{ width: `${item.cols * cellWidth + (item.cols - 1) * cellGap}px` }}>
-                {Array.from({ length: item.cols + 1 }, (_, pillarIndex) => {
+              <div className="relative" style={{ width: `${item.rows * cellWidth + (item.rows - 1) * cellGap}px` }}>
+                {Array.from({ length: item.rows + 1 }, (_, pillarIndex) => {
                   const isPillarOn = pillarAvailability[pillarIndex] ?? false;
                   // Calculate pillar position: centered between cells
                   let leftPosition;
                   if (pillarIndex === 0) {
                     // Left edge - center of left border
                     leftPosition = -pillarWidth / 2;
-                  } else if (pillarIndex === item.cols) {
+                  } else if (pillarIndex === item.rows) {
                     // Right edge - center of right border
-                    leftPosition = item.cols * cellWidth + (item.cols - 1) * cellGap - pillarWidth / 2;
+                    leftPosition = item.rows * cellWidth + (item.rows - 1) * cellGap - pillarWidth / 2;
                   } else {
                     // Between cells - in the gap between cells
                     leftPosition = pillarIndex * (cellWidth + cellGap) - cellGap / 2 - pillarWidth / 2;
@@ -307,111 +282,107 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
                     <div className="flex justify-between items-center px-2 py-1 bg-background rounded text-xs">
                       <span className="font-medium">Floor {floor + 1}</span>
                       <div className="flex gap-3 text-muted-foreground">
-                        <span>Columns: {item.cols}</span>
+                        <span>Cells: {item.rows}</span>
                         <span>Current: <span className="font-medium text-green-600">{currentStock}</span></span>
                         <span>Max: <span className="font-medium">{totalCapacity}</span></span>
                       </div>
                     </div>
 
-                    {/* Shelves */}
+                    {/* Cells (horizontal row) */}
                     <div className="bg-background/50 p-2 rounded">
-                      <div className="space-y-1">
-                        {Array.from({ length: item.rows }, (_, rowIndex) => (
-                          <div key={rowIndex} className="flex gap-1 justify-center">
-                            {Array.from({ length: item.cols }, (_, colIndex) => {
-                              const isAvailable = cellAvailability[floor]?.[rowIndex]?.[colIndex] ?? true;
-                              const capacity = cellCapacity[floor]?.[rowIndex]?.[colIndex] ?? 1;
+                      <div className="flex gap-1 justify-center">
+                        {Array.from({ length: item.rows }, (_, cellIndex) => {
+                          const isAvailable = cellAvailability[floor]?.[cellIndex] ?? true;
+                          const capacity = cellCapacity[floor]?.[cellIndex] ?? 1;
 
-                              // Calculate cell occupancy from inventory data
-                              const occupancy = calculateCellOccupancy(
+                          // Calculate cell occupancy from inventory data
+                          const occupancy = calculateCellOccupancy(
+                            floor,
+                            cellIndex,
+                            0,
+                            cellInventoryMap,
+                            capacity
+                          );
+
+                          // Get colors based on occupancy
+                          const bgColor = isAvailable
+                            ? getOccupancyColor(occupancy.percentage, false)
+                            : getOccupancyColor(0, true);
+                          const borderColor = isAvailable
+                            ? getOccupancyBorderColor(occupancy.percentage, false)
+                            : getOccupancyBorderColor(0, true);
+
+                          // Generate tooltip
+                          const tooltip = isAvailable
+                            ? getCellTooltip(
+                                occupancy.items,
+                                occupancy.currentCount,
+                                occupancy.actualUldCount,
+                                occupancy.capacity,
+                                occupancy.percentage
+                              )
+                            : `Floor ${floor + 1}, Cell ${cellIndex + 1}: Blocked`;
+
+                          // Check if this cell is selected
+                          const isSelected =
+                            selectedCell?.floor === floor &&
+                            selectedCell?.row === cellIndex &&
+                            selectedCell?.col === 0;
+
+                          // Handle cell click
+                          const handleCellClick = () => {
+                            if (isAvailable && occupancy.items.length > 0) {
+                              setSelectedCell({
                                 floor,
-                                rowIndex,
-                                colIndex,
-                                cellInventoryMap,
-                                capacity
-                              );
+                                row: cellIndex,
+                                col: 0,
+                                items: occupancy.items,
+                                currentCount: occupancy.currentCount,
+                                actualUldCount: occupancy.actualUldCount,
+                                capacity: occupancy.capacity,
+                                percentage: occupancy.percentage,
+                              });
+                            }
+                          };
 
-                              // Get colors based on occupancy
-                              const bgColor = isAvailable
-                                ? getOccupancyColor(occupancy.percentage, false)
-                                : getOccupancyColor(0, true);
-                              const borderColor = isAvailable
-                                ? getOccupancyBorderColor(occupancy.percentage, false)
-                                : getOccupancyBorderColor(0, true);
-
-                              // Generate tooltip
-                              const tooltip = isAvailable
-                                ? getCellTooltip(
-                                    occupancy.items,
-                                    occupancy.currentCount,
-                                    occupancy.actualUldCount,
-                                    occupancy.capacity,
-                                    occupancy.percentage
-                                  )
-                                : `Floor ${floor + 1}, Row ${rowIndex + 1}, Col ${colIndex + 1}: Blocked`;
-
-                              // Check if this cell is selected
-                              const isSelected =
-                                selectedCell?.floor === floor &&
-                                selectedCell?.row === rowIndex &&
-                                selectedCell?.col === colIndex;
-
-                              // Handle cell click
-                              const handleCellClick = () => {
-                                if (isAvailable && occupancy.items.length > 0) {
-                                  setSelectedCell({
-                                    floor,
-                                    row: rowIndex,
-                                    col: colIndex,
-                                    items: occupancy.items,
-                                    currentCount: occupancy.currentCount,
-                                    actualUldCount: occupancy.actualUldCount,
-                                    capacity: occupancy.capacity,
-                                    percentage: occupancy.percentage,
-                                  });
-                                }
-                              };
-
-                              return (
-                                <div
-                                  key={`${rowIndex}-${colIndex}`}
-                                  className={cn(
-                                    'relative rounded border-2 transition-all cursor-pointer hover:shadow-md',
-                                    isSelected && 'ring-2 ring-blue-500 ring-offset-1'
-                                  )}
-                                  style={{
-                                    width: `${cellWidth}px`,
-                                    height: '48px',
-                                    backgroundColor: bgColor,
-                                    borderColor: isSelected ? '#3b82f6' : borderColor,
-                                  }}
-                                  title={tooltip}
-                                  onClick={handleCellClick}
-                                >
-                                  <div className="absolute inset-0 flex flex-col items-center justify-center text-xs font-medium px-0.5">
-                                    {isAvailable && capacity > 0 ? (
-                                      <>
-                                        <div className="text-[10px] leading-[1.1] text-gray-700 font-semibold">
-                                          {formatOccupancy(occupancy.currentCount, occupancy.capacity)}
-                                        </div>
-                                        <div className="text-[9px] leading-[1.1] text-gray-600">
-                                          {occupancy.percentage}%
-                                        </div>
-                                        {occupancy.actualUldCount > 0 && (
-                                          <div className="text-[8px] leading-[1.1] text-blue-600 font-medium">
-                                            {formatUldCount(occupancy.actualUldCount)}
-                                          </div>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <div className="text-gray-500">×</div>
+                          return (
+                            <div
+                              key={cellIndex}
+                              className={cn(
+                                'relative rounded border-2 transition-all cursor-pointer hover:shadow-md',
+                                isSelected && 'ring-2 ring-blue-500 ring-offset-1'
+                              )}
+                              style={{
+                                width: `${cellWidth}px`,
+                                height: '48px',
+                                backgroundColor: bgColor,
+                                borderColor: isSelected ? '#3b82f6' : borderColor,
+                              }}
+                              title={tooltip}
+                              onClick={handleCellClick}
+                            >
+                              <div className="absolute inset-0 flex flex-col items-center justify-center text-xs font-medium px-0.5">
+                                {isAvailable && capacity > 0 ? (
+                                  <>
+                                    <div className="text-[10px] leading-[1.1] text-gray-700 font-semibold">
+                                      {formatOccupancy(occupancy.currentCount, occupancy.capacity)}
+                                    </div>
+                                    <div className="text-[9px] leading-[1.1] text-gray-600">
+                                      {occupancy.percentage}%
+                                    </div>
+                                    {occupancy.actualUldCount > 0 && (
+                                      <div className="text-[8px] leading-[1.1] text-blue-600 font-medium">
+                                        {formatUldCount(occupancy.actualUldCount)}
+                                      </div>
                                     )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
+                                  </>
+                                ) : (
+                                  <div className="text-gray-500">×</div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -419,7 +390,7 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
                     <div className="flex justify-center py-1">
                       <div
                         className="h-1.5 bg-slate-600 rounded-sm"
-                        style={{ width: `${item.cols * cellWidth + (item.cols - 1) * cellGap}px` }}
+                        style={{ width: `${item.rows * cellWidth + (item.rows - 1) * cellGap}px` }}
                       />
                     </div>
                   </div>
@@ -557,17 +528,17 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
       <div className="text-xs text-muted-foreground bg-muted p-2 rounded space-y-1">
         <div>• Click shelf cell: toggle availability (green/gray)</div>
         <div>• Click cell number: change capacity (0→1→2→3→4→0)</div>
-        <div>• Click pillar (vertical bar): toggle on/off for all floors</div>
+        <div>• Click pillar (vertical bar on grid): toggle on/off for all floors</div>
         <div className="text-[10px] mt-1 opacity-80">
           Capacity ≥2: counts actual items | Capacity =1: counts as 1 (ignores ULDs) | Capacity =0: blocked
         </div>
       </div>
 
       <div className="flex justify-between items-center">
-        <Label className="text-xs">Grid: {item.rows} × {item.cols} | {item.floors} floors</Label>
+        <Label className="text-xs">Grid: {item.rows} cells/floor | {item.floors} floors</Label>
         <div className="flex items-center gap-3">
           <div className="text-sm font-medium">
-            Total Max Capacity: {getTotalMaxCapacity()}
+            Total Max Capacity: {calculateCapacity(item)}
           </div>
           <Button
             variant="outline"
@@ -584,35 +555,65 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
       <div className="space-y-1 max-h-[70vh] overflow-y-auto p-4 bg-muted/20 rounded-lg">
         {/* All floors with pillars penetrating through */}
         <div className="relative">
-          {/* Pillars - rendered as background, penetrating all floors */}
+          {/* Pillars - rendered as background, penetrating all floors, clickable in edit mode */}
           <div className="absolute inset-0 flex justify-center pointer-events-none">
-            <div className="relative" style={{ width: `${item.cols * cellWidth + (item.cols - 1) * cellGap}px` }}>
-              {Array.from({ length: item.cols + 1 }, (_, pillarIndex) => {
+            <div className="relative" style={{ width: `${item.rows * cellWidth + (item.rows - 1) * cellGap}px` }}>
+              {Array.from({ length: item.rows + 1 }, (_, pillarIndex) => {
                 const isPillarOn = pillarAvailability[pillarIndex] ?? false;
                 // Calculate pillar position: centered between cells
                 let leftPosition;
                 if (pillarIndex === 0) {
                   // Left edge - center of left border
                   leftPosition = -pillarWidth / 2;
-                } else if (pillarIndex === item.cols) {
+                } else if (pillarIndex === item.rows) {
                   // Right edge - center of right border
-                  leftPosition = item.cols * cellWidth + (item.cols - 1) * cellGap - pillarWidth / 2;
+                  leftPosition = item.rows * cellWidth + (item.rows - 1) * cellGap - pillarWidth / 2;
                 } else {
                   // Between cells - in the gap between cells
                   leftPosition = pillarIndex * (cellWidth + cellGap) - cellGap / 2 - pillarWidth / 2;
                 }
 
-                return isPillarOn ? (
-                  <div
+                // Wider click area (16px) but visual pillar remains 6px
+                const clickAreaWidth = 16;
+                const clickAreaLeft = leftPosition - (clickAreaWidth - pillarWidth) / 2;
+
+                return (
+                  <button
                     key={pillarIndex}
-                    className="absolute top-0 bottom-0 bg-slate-700/80 rounded-sm shadow-md"
+                    onClick={() => togglePillar(pillarIndex)}
+                    className="absolute top-0 bottom-0 group transition-all cursor-pointer pointer-events-auto z-20"
                     style={{
-                      left: `${leftPosition}px`,
-                      width: `${pillarWidth}px`
+                      left: `${clickAreaLeft}px`,
+                      width: `${clickAreaWidth}px`
                     }}
-                    title={`Pillar ${pillarIndex + 1}`}
-                  />
-                ) : null;
+                    title={`Pillar ${pillarIndex + 1}: Click to toggle ${isPillarOn ? 'off' : 'on'}${pillarIndex === 0 ? ' (Left)' : pillarIndex === item.rows ? ' (Right)' : ` (Between cell ${pillarIndex} & ${pillarIndex + 1})`}`}
+                  >
+                    {/* Visual pillar (6px width, centered in click area) - always visible */}
+                    <div
+                      className={cn(
+                        "absolute top-0 bottom-0 rounded-sm transition-all",
+                        isPillarOn
+                          ? "bg-slate-700/80 group-hover:bg-slate-600 shadow-md"
+                          : "bg-slate-300/50 group-hover:bg-slate-500/70 border border-dashed border-slate-400/50"
+                      )}
+                      style={{
+                        left: `${(clickAreaWidth - pillarWidth) / 2}px`,
+                        width: `${pillarWidth}px`
+                      }}
+                    />
+                    {/* Hover indicator (wider area highlight on hover) */}
+                    <div
+                      className={cn(
+                        "absolute top-0 bottom-0 rounded-sm opacity-0 group-hover:opacity-30 transition-all duration-200",
+                        isPillarOn ? "bg-slate-600" : "bg-slate-500"
+                      )}
+                      style={{
+                        left: 0,
+                        width: `${clickAreaWidth}px`
+                      }}
+                    />
+                  </button>
+                );
               })}
             </div>
           </div>
@@ -629,53 +630,46 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
                   <div className="flex justify-between items-center px-2 py-1 bg-background rounded text-xs">
                     <span className="font-medium">Floor {floor + 1}</span>
                     <div className="flex gap-3 text-muted-foreground">
-                      <span>Columns: {item.cols}</span>
+                      <span>Cells: {item.rows}</span>
                       <span className="font-medium">Max Capacity: {totalCapacity}</span>
                     </div>
                   </div>
 
-                  {/* Shelves (cells) */}
+                  {/* Cells (horizontal row) */}
                   <div className="bg-background/50 p-2 rounded">
-                    <div className="space-y-1">
-                      {Array.from({ length: item.rows }, (_, rowIndex) => (
-                        <div
-                          key={rowIndex}
-                          className="flex gap-1 justify-center"
-                        >
-                          {Array.from({ length: item.cols }, (_, colIndex) => {
-                            const isAvailable = cellAvailability[floor]?.[rowIndex]?.[colIndex] ?? true;
-                            const capacity = cellCapacity[floor]?.[rowIndex]?.[colIndex] ?? 1;
+                    <div className="flex gap-1 justify-center">
+                      {Array.from({ length: item.rows }, (_, cellIndex) => {
+                        const isAvailable = cellAvailability[floor]?.[cellIndex] ?? true;
+                        const capacity = cellCapacity[floor]?.[cellIndex] ?? 1;
 
-                            return (
-                              <button
-                                key={`${rowIndex}-${colIndex}`}
-                                onClick={() => toggleCell(floor, rowIndex, colIndex)}
+                        return (
+                          <button
+                            key={cellIndex}
+                            onClick={() => toggleCell(floor, cellIndex)}
+                            className={cn(
+                              'relative rounded border-2 transition-all hover:scale-105',
+                              isAvailable
+                                ? 'bg-green-500/20 border-green-500 hover:bg-green-500/30'
+                                : 'bg-gray-500/20 border-gray-500 hover:bg-gray-500/30'
+                            )}
+                            style={{ width: `${cellWidth}px`, height: '40px' }}
+                            title={`Floor ${floor + 1}, Cell ${cellIndex + 1}: ${isAvailable ? 'Available' : 'Blocked'} | Capacity: ${capacity}`}
+                          >
+                            {isAvailable && (
+                              <span
+                                onClick={(e) => incrementCapacity(floor, cellIndex, e)}
                                 className={cn(
-                                  'relative rounded border-2 transition-all hover:scale-105',
-                                  isAvailable
-                                    ? 'bg-green-500/20 border-green-500 hover:bg-green-500/30'
-                                    : 'bg-gray-500/20 border-gray-500 hover:bg-gray-500/30'
+                                  'absolute inset-0 flex items-center justify-center text-xs font-bold cursor-pointer hover:bg-green-500/20 rounded',
+                                  capacity === 0 ? 'text-red-600' :
+                                  capacity > 1 ? 'text-green-700' : 'text-green-600/60'
                                 )}
-                                style={{ width: `${cellWidth}px`, height: '40px' }}
-                                title={`Floor ${floor + 1}, Row ${rowIndex + 1}, Col ${colIndex + 1}: ${isAvailable ? 'Available' : 'Blocked'} | Capacity: ${capacity}`}
                               >
-                                {isAvailable && (
-                                  <span
-                                    onClick={(e) => incrementCapacity(floor, rowIndex, colIndex, e)}
-                                    className={cn(
-                                      'absolute inset-0 flex items-center justify-center text-xs font-bold cursor-pointer hover:bg-green-500/20 rounded',
-                                      capacity === 0 ? 'text-red-600' :
-                                      capacity > 1 ? 'text-green-700' : 'text-green-600/60'
-                                    )}
-                                  >
-                                    {capacity}
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ))}
+                                {capacity}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -683,57 +677,12 @@ export function RackGridEditor({ item, mode, inventory, onUpdate }: RackGridEdit
                   <div className="flex justify-center py-1">
                     <div
                       className="h-1.5 bg-slate-600 rounded-sm"
-                      style={{ width: `${item.cols * cellWidth + (item.cols - 1) * cellGap}px` }}
+                      style={{ width: `${item.rows * cellWidth + (item.rows - 1) * cellGap}px` }}
                     />
                   </div>
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        {/* Pillars control (shared across all floors) - at the bottom */}
-        <div className="border-t-2 border-dashed pt-3 mt-3">
-          <Label className="text-xs text-muted-foreground px-2 mb-2 block">
-            Pillars (click to toggle on/off)
-          </Label>
-          <div className="flex justify-center">
-            <div
-              className="flex items-end relative"
-              style={{ width: `${item.cols * cellWidth + (item.cols - 1) * cellGap}px`, height: '48px' }}
-            >
-              {Array.from({ length: item.cols + 1 }, (_, pillarIndex) => {
-                const isPillarOn = pillarAvailability[pillarIndex] ?? false;
-                // Calculate pillar position to match the visual pillars above
-                let leftPosition;
-                if (pillarIndex === 0) {
-                  leftPosition = -pillarWidth / 2;
-                } else if (pillarIndex === item.cols) {
-                  leftPosition = item.cols * cellWidth + (item.cols - 1) * cellGap - pillarWidth / 2;
-                } else {
-                  leftPosition = pillarIndex * (cellWidth + cellGap) - cellGap / 2 - pillarWidth / 2;
-                }
-
-                return (
-                  <button
-                    key={pillarIndex}
-                    onClick={() => togglePillar(pillarIndex)}
-                    className={cn(
-                      'absolute bottom-0 rounded-sm transition-all hover:scale-110',
-                      isPillarOn
-                        ? 'bg-slate-700 hover:bg-slate-600'
-                        : 'bg-slate-300 hover:bg-slate-400 opacity-40'
-                    )}
-                    style={{
-                      left: `${leftPosition}px`,
-                      width: `${pillarWidth}px`,
-                      height: '40px'
-                    }}
-                    title={`Pillar ${pillarIndex + 1}: ${isPillarOn ? 'On' : 'Off'}${pillarIndex === 0 ? ' (Left)' : pillarIndex === item.cols ? ' (Right)' : ` (Between col ${pillarIndex} & ${pillarIndex + 1})`}`}
-                  />
-                );
-              })}
-            </div>
           </div>
         </div>
 
