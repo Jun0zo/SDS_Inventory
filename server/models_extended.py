@@ -269,7 +269,7 @@ class ProductionLineMaterialExtended(BaseModel):
 class ProductionLineExtended(BaseModel):
     """Extended production line model for API responses"""
     id: Optional[str] = None
-    warehouse_id: str
+    # warehouse_id removed - now using junction table warehouse_production_lines
     line_code: str
     line_name: str
     line_count: int = 1
@@ -277,6 +277,7 @@ class ProductionLineExtended(BaseModel):
     output_product_code: Optional[str] = None
     output_product_name: Optional[str] = None
     materials: List[ProductionLineMaterialExtended] = Field(default_factory=list)
+    warehouse_ids: List[str] = Field(default_factory=list)  # Connected warehouse IDs via junction table
     created_by: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -292,7 +293,7 @@ class ProductionLineResponse(BaseModel):
 
 class ProductionLineCreateRequest(BaseModel):
     """Request to create production line"""
-    warehouse_id: str
+    # warehouse_id removed - now using warehouse_ids for initial associations
     line_code: str
     line_name: str
     line_count: int = Field(default=1, gt=0)
@@ -300,6 +301,15 @@ class ProductionLineCreateRequest(BaseModel):
     output_product_code: Optional[str] = None
     output_product_name: Optional[str] = None
     materials: List[Dict[str, Any]] = Field(default_factory=list)
+    warehouse_ids: List[str] = Field(default_factory=list)  # Initial warehouse associations
+
+
+class WarehouseProductionLineLink(BaseModel):
+    """Model for warehouse-production line link"""
+    id: Optional[str] = None
+    warehouse_id: str
+    production_line_id: str
+    created_at: Optional[datetime] = None
 
 class ProductionLineUpdateRequest(BaseModel):
     """Request to update production line"""

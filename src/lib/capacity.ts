@@ -7,17 +7,26 @@ import { AnyItem } from '@/types/inventory';
 
 /**
  * Calculate maximum capacity of a component
+ * For racks: uses cellCapacity[][] as the single source of truth
+ * Block Zone and Flex Zone always return 0 (excluded from capacity calculations)
  */
 export function calculateCapacity(item: AnyItem): number {
+  // Block Zone and Flex Zone have no capacity (excluded from stats)
+  if (item.zoneType === 'block' || item.zoneType === 'flex') {
+    return 0;
+  }
+
   if (item.type === 'rack') {
-    // Check if custom floor capacities are set
-    if (item.floorCapacities && item.floorCapacities.length > 0) {
-      // Use sum of floor capacities if available
-      return item.floorCapacities.reduce((sum, capacity) => sum + (capacity || 0), 0);
-    } else {
-      // Fallback: floors × rows × cols
-      return (item.floors || 1) * item.rows * item.cols;
+    // Use cellCapacity[][] if available and properly initialized
+    if (item.cellCapacity &&
+        item.cellCapacity.length === item.floors &&
+        item.cellCapacity[0]?.length === item.rows) {
+      return item.cellCapacity.reduce((floorSum, floor) => {
+        return floorSum + (floor?.reduce((cellSum, cap) => cellSum + (cap || 0), 0) || 0);
+      }, 0);
     }
+    // Fallback: floors × rows (each cell default capacity = 1)
+    return (item.floors || 1) * item.rows;
   } else {
     // Flat: check if custom maxCapacity is set
     if (item.maxCapacity && item.maxCapacity > 0) {

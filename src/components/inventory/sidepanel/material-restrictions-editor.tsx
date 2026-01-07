@@ -51,16 +51,12 @@ export function MaterialRestrictionsEditor({
     (MaterialRestriction | null)[]
   >(item.floorMaterialRestrictions || Array(item.floors).fill(null));
   const [cellRestrictions, setCellRestrictions] = useState<
-    (MaterialRestriction | null)[][][]
+    (MaterialRestriction | null)[][]
   >(
     item.cellMaterialRestrictions ||
       Array(item.floors)
         .fill(null)
-        .map(() =>
-          Array(item.rows)
-            .fill(null)
-            .map(() => Array(item.cols).fill(null))
-        )
+        .map(() => Array(item.rows).fill(null))
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,11 +71,7 @@ export function MaterialRestrictionsEditor({
       item.cellMaterialRestrictions ||
         Array(item.floors)
           .fill(null)
-          .map(() =>
-            Array(item.rows)
-              .fill(null)
-              .map(() => Array(item.cols).fill(null))
-          )
+          .map(() => Array(item.rows).fill(null))
     );
 
   const handleSaveFloor = async () => {
@@ -120,11 +112,7 @@ export function MaterialRestrictionsEditor({
       item.cellMaterialRestrictions ||
         Array(item.floors)
           .fill(null)
-          .map(() =>
-            Array(item.rows)
-              .fill(null)
-              .map(() => Array(item.cols).fill(null))
-          )
+          .map(() => Array(item.rows).fill(null))
     );
     setError(null);
     onCancel?.();
@@ -394,8 +382,8 @@ function FloorRestrictionsEditor({
 // Cell Restrictions Editor
 interface CellRestrictionsEditorProps {
   item: RackItem;
-  restrictions: (MaterialRestriction | null)[][][];
-  onChange: (restrictions: (MaterialRestriction | null)[][][]) => void;
+  restrictions: (MaterialRestriction | null)[][];
+  onChange: (restrictions: (MaterialRestriction | null)[][]) => void;
 }
 
 function CellRestrictionsEditor({
@@ -406,8 +394,7 @@ function CellRestrictionsEditor({
   const [selectedFloor, setSelectedFloor] = useState(0);
   const [selectedCell, setSelectedCell] = useState<{
     floor: number;
-    row: number;
-    col: number;
+    cell: number; // cell index (horizontal position)
   } | null>(null);
   const [majorCategories, setMajorCategories] = useState<string[]>([]);
   const [minorCategories, setMinorCategories] = useState<string[]>([]);
@@ -418,7 +405,7 @@ function CellRestrictionsEditor({
 
   useEffect(() => {
     if (selectedCell) {
-      const restriction = restrictions[selectedCell.floor]?.[selectedCell.row]?.[selectedCell.col];
+      const restriction = restrictions[selectedCell.floor]?.[selectedCell.cell];
       loadMinorCategories(restriction?.major_category || undefined);
     }
   }, [selectedCell]);
@@ -437,25 +424,24 @@ function CellRestrictionsEditor({
 
   const updateCellRestriction = (
     floor: number,
-    row: number,
-    col: number,
+    cell: number,
     field: 'major_category' | 'minor_category',
     value: string
   ) => {
     const newRestrictions = JSON.parse(JSON.stringify(restrictions));
-    const current = newRestrictions[floor][row][col] || {};
+    const current = newRestrictions[floor][cell] || {};
 
     if (value === 'any' || value === '') {
       if (field === 'major_category') {
-        newRestrictions[floor][row][col] = null;
+        newRestrictions[floor][cell] = null;
       } else {
-        newRestrictions[floor][row][col] = {
+        newRestrictions[floor][cell] = {
           ...current,
           minor_category: null,
         };
       }
     } else {
-      newRestrictions[floor][row][col] = {
+      newRestrictions[floor][cell] = {
         ...current,
         [field]: value,
       };
@@ -495,40 +481,37 @@ function CellRestrictionsEditor({
         </div>
       </div>
 
-      {/* Cell Grid */}
+      {/* Cell Grid (horizontal row) */}
       <div className="border rounded-lg p-4 bg-muted/30">
-        <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${item.cols}, 1fr)` }}>
-          {Array.from({ length: item.rows }, (_, rowIdx) =>
-            Array.from({ length: item.cols }, (_, colIdx) => {
-              const restriction = restrictions[selectedFloor]?.[rowIdx]?.[colIdx];
-              const isSelected =
-                selectedCell?.floor === selectedFloor &&
-                selectedCell?.row === rowIdx &&
-                selectedCell?.col === colIdx;
+        <div className="flex gap-1 justify-center">
+          {Array.from({ length: item.rows }, (_, cellIdx) => {
+            const restriction = restrictions[selectedFloor]?.[cellIdx];
+            const isSelected =
+              selectedCell?.floor === selectedFloor &&
+              selectedCell?.cell === cellIdx;
 
-              return (
-                <button
-                  key={`${rowIdx}-${colIdx}`}
-                  onClick={() =>
-                    setSelectedCell({ floor: selectedFloor, row: rowIdx, col: colIdx })
-                  }
-                  className={`
-                    aspect-square rounded border-2 text-xs font-medium
-                    transition-colors flex items-center justify-center
-                    ${getCellColor(restriction)}
-                    ${isSelected ? 'ring-2 ring-primary' : ''}
-                  `}
-                  title={
-                    restriction?.major_category
-                      ? `${restriction.major_category}${restriction.minor_category ? ` / ${restriction.minor_category}` : ''}`
-                      : 'No restriction'
-                  }
-                >
-                  {restriction?.major_category?.slice(0, 2) || '·'}
-                </button>
-              );
-            })
-          )}
+            return (
+              <button
+                key={cellIdx}
+                onClick={() =>
+                  setSelectedCell({ floor: selectedFloor, cell: cellIdx })
+                }
+                className={`
+                  w-12 h-12 rounded border-2 text-xs font-medium
+                  transition-colors flex items-center justify-center
+                  ${getCellColor(restriction)}
+                  ${isSelected ? 'ring-2 ring-primary' : ''}
+                `}
+                title={
+                  restriction?.major_category
+                    ? `${restriction.major_category}${restriction.minor_category ? ` / ${restriction.minor_category}` : ''}`
+                    : 'No restriction'
+                }
+              >
+                {restriction?.major_category?.slice(0, 2) || '·'}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -536,23 +519,19 @@ function CellRestrictionsEditor({
       {selectedCell && (
         <div className="p-4 border rounded-lg space-y-3 bg-card">
           <Label className="font-medium">
-            Cell: Floor {selectedCell.floor + 1}, Row {selectedCell.row + 1}, Col{' '}
-            {selectedCell.col + 1}
+            Cell: Floor {selectedCell.floor + 1}, Position {selectedCell.cell + 1}
           </Label>
 
           <div className="space-y-2">
             <Label className="text-xs">Major Category</Label>
             <Select
               value={
-                restrictions[selectedCell.floor]?.[selectedCell.row]?.[
-                  selectedCell.col
-                ]?.major_category || 'any'
+                restrictions[selectedCell.floor]?.[selectedCell.cell]?.major_category || 'any'
               }
               onValueChange={(value) =>
                 updateCellRestriction(
                   selectedCell.floor,
-                  selectedCell.row,
-                  selectedCell.col,
+                  selectedCell.cell,
                   'major_category',
                   value
                 )
@@ -576,23 +555,18 @@ function CellRestrictionsEditor({
             <Label className="text-xs">Minor Category</Label>
             <Select
               value={
-                restrictions[selectedCell.floor]?.[selectedCell.row]?.[
-                  selectedCell.col
-                ]?.minor_category || 'any'
+                restrictions[selectedCell.floor]?.[selectedCell.cell]?.minor_category || 'any'
               }
               onValueChange={(value) =>
                 updateCellRestriction(
                   selectedCell.floor,
-                  selectedCell.row,
-                  selectedCell.col,
+                  selectedCell.cell,
                   'minor_category',
                   value
                 )
               }
               disabled={
-                !restrictions[selectedCell.floor]?.[selectedCell.row]?.[
-                  selectedCell.col
-                ]?.major_category
+                !restrictions[selectedCell.floor]?.[selectedCell.cell]?.major_category
               }
             >
               <SelectTrigger className="h-8">

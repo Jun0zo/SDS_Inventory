@@ -720,7 +720,7 @@ export default function MaterialsPage() {
                         materials.map((material) => (
                           <TableRow key={material.id}>
                             <TableCell className="font-mono text-sm">
-                              {material.item_code}
+                              {String(material.item_code)}
                             </TableCell>
                             <TableCell className="max-w-[300px] truncate">
                               {material.description || '-'}

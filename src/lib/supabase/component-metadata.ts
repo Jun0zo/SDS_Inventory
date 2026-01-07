@@ -139,10 +139,10 @@ export async function getComponentProductionLineFeeds(
       return [];
     }
 
-    // Get production line details
+    // Get production line details (warehouse_id no longer exists in production_lines)
     const { data, error } = await supabase
       .from("production_lines")
-      .select("id, line_code, line_name, daily_production_capacity, warehouse_id")
+      .select("id, line_code, line_name, daily_production_capacity")
       .in("id", item.feeds_production_line_ids);
 
     if (error) {
@@ -154,31 +154,54 @@ export async function getComponentProductionLineFeeds(
       return [];
     }
 
-    // Get unique warehouse IDs
-    const warehouseIds = [...new Set(data.map((line: any) => line.warehouse_id))];
+    // Get warehouse names for each production line via junction table
+    const lineIds = data.map((line: any) => line.id);
 
-    // Fetch warehouse names
-    const { data: warehouses, error: warehouseError } = await supabase
-      .from("warehouses")
-      .select("id, name")
-      .in("id", warehouseIds);
+    // Get all warehouse links for these production lines
+    const { data: links, error: linkError } = await supabase
+      .from("warehouse_production_lines")
+      .select("production_line_id, warehouse_id")
+      .in("production_line_id", lineIds);
 
-    if (warehouseError) {
-      console.error("Failed to fetch warehouses:", warehouseError);
-      return [];
+    if (linkError) {
+      console.error("Failed to fetch warehouse links:", linkError);
     }
 
-    // Create warehouse map for quick lookup
-    const warehouseMap = new Map(
-      warehouses?.map((w: any) => [w.id, w.name]) || []
-    );
+    // Get unique warehouse IDs
+    const warehouseIds = [...new Set(links?.map((l: any) => l.warehouse_id) || [])];
+
+    // Fetch warehouse names
+    let warehouseMap = new Map<string, string>();
+    if (warehouseIds.length > 0) {
+      const { data: warehouses, error: warehouseError } = await supabase
+        .from("warehouses")
+        .select("id, name")
+        .in("id", warehouseIds);
+
+      if (warehouseError) {
+        console.error("Failed to fetch warehouses:", warehouseError);
+      } else {
+        warehouseMap = new Map(warehouses?.map((w: any) => [w.id, w.name]) || []);
+      }
+    }
+
+    // Create line-to-warehouses map
+    const lineWarehousesMap = new Map<string, string[]>();
+    links?.forEach((link: any) => {
+      const current = lineWarehousesMap.get(link.production_line_id) || [];
+      const warehouseName = warehouseMap.get(link.warehouse_id);
+      if (warehouseName) {
+        current.push(warehouseName);
+      }
+      lineWarehousesMap.set(link.production_line_id, current);
+    });
 
     return data.map((line: any) => ({
-      id: line.id, // Use production_line_id as id for compatibility
+      id: line.id,
       production_line_id: line.id,
       line_code: line.line_code || "",
       line_name: line.line_name || "",
-      factory_name: warehouseMap.get(line.warehouse_id) || "",
+      factory_name: lineWarehousesMap.get(line.id)?.join(", ") || "",
       daily_capacity: line.daily_production_capacity || 0,
     }));
   } catch (error) {
@@ -395,22 +418,30 @@ export async function refreshComponentMetadata(): Promise<boolean> {
  */
 export async function getMajorCategories(): Promise<string[]> {
   try {
+    if (!supabase) {
+      console.warn("Supabase client not initialized - getMajorCategories");
+      return [];
+    }
+
+    // Fetch from major_categories table instead of materials
     const { data, error } = await supabase
-      .from("materials")
-      .select("major_category")
-      .not("major_category", "is", null);
+      .from("major_categories")
+      .select("name")
+      .order("display_order", { ascending: true });
 
     if (error) {
       console.error("Failed to fetch major categories:", error);
       return [];
     }
 
-    // Get unique categories
-    const categories = [...new Set(data.map((m) => m.major_category))].filter(
-      Boolean
-    ) as string[];
+    if (!data || data.length === 0) {
+      console.warn("No major categories found in major_categories table");
+      return [];
+    }
 
-    return categories.sort();
+    const categories = data.map((c) => c.name);
+    console.log("Fetched major categories:", categories.length, categories);
+    return categories;
   } catch (error) {
     console.error("Error fetching major categories:", error);
     return [];
@@ -418,35 +449,65 @@ export async function getMajorCategories(): Promise<string[]> {
 }
 
 /**
- * Get all available minor categories from materials table
- * Optionally filter by major category
+ * Get all available minor categories from minor_categories table
+ * Optionally filter by major category name
  */
 export async function getMinorCategories(
-  majorCategory?: string
+  majorCategoryName?: string
 ): Promise<string[]> {
   try {
-    let query = supabase
-      .from("materials")
-      .select("minor_category")
-      .not("minor_category", "is", null);
-
-    if (majorCategory && majorCategory !== "any") {
-      query = query.eq("major_category", majorCategory);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Failed to fetch minor categories:", error);
+    if (!supabase) {
+      console.warn("Supabase client not initialized - getMinorCategories");
       return [];
     }
 
-    // Get unique categories
-    const categories = [...new Set(data.map((m) => m.minor_category))].filter(
-      Boolean
-    ) as string[];
+    // If major category is specified, first get its ID
+    if (majorCategoryName && majorCategoryName !== "any") {
+      const { data: majorCat, error: majorError } = await supabase
+        .from("major_categories")
+        .select("id")
+        .eq("name", majorCategoryName)
+        .maybeSingle();
 
-    return categories.sort();
+      if (majorError) {
+        console.error("Failed to fetch major category ID:", majorError);
+        return [];
+      }
+
+      if (!majorCat) {
+        console.warn("Major category not found:", majorCategoryName);
+        return [];
+      }
+
+      // Fetch minor categories for this major category
+      const { data, error } = await supabase
+        .from("minor_categories")
+        .select("name")
+        .eq("major_category_id", majorCat.id)
+        .order("display_order", { ascending: true });
+
+      if (error) {
+        console.error("Failed to fetch minor categories:", error);
+        return [];
+      }
+
+      return data?.map((c) => c.name) || [];
+    } else {
+      // Fetch all minor categories
+      const { data, error } = await supabase
+        .from("minor_categories")
+        .select("name")
+        .order("display_order", { ascending: true });
+
+      if (error) {
+        console.error("Failed to fetch minor categories:", error);
+        return [];
+      }
+
+      // Get unique categories
+      const categories = [...new Set(data?.map((c) => c.name) || [])];
+      return categories;
+    }
   } catch (error) {
     console.error("Error fetching minor categories:", error);
     return [];
@@ -454,7 +515,7 @@ export async function getMinorCategories(
 }
 
 /**
- * Get all production lines for a warehouse
+ * Get all production lines for a warehouse (via junction table)
  */
 export async function getWarehouseProductionLines(
   warehouseId: string
@@ -472,11 +533,28 @@ export async function getWarehouseProductionLines(
       return [];
     }
 
-    // Then fetch production lines
+    // Get production line IDs linked to this warehouse via junction table
+    const { data: links, error: linkError } = await supabase
+      .from("warehouse_production_lines")
+      .select("production_line_id")
+      .eq("warehouse_id", warehouseId);
+
+    if (linkError) {
+      console.error("Failed to fetch warehouse-production line links:", linkError);
+      return [];
+    }
+
+    if (!links || links.length === 0) {
+      return [];
+    }
+
+    const lineIds = links.map((l: any) => l.production_line_id);
+
+    // Then fetch production lines by IDs
     const { data, error } = await supabase
       .from("production_lines")
       .select("id, line_code, line_name, daily_production_capacity")
-      .eq("warehouse_id", warehouseId);
+      .in("id", lineIds);
 
     if (error) {
       console.error("Failed to fetch production lines:", error);
@@ -500,5 +578,88 @@ export async function getWarehouseProductionLines(
   } catch (error) {
     console.error("Error fetching production lines:", error);
     return [];
+  }
+}
+
+
+/**
+ * Get all production lines (without warehouse filter)
+ */
+export async function getAllProductionLines(): Promise<ProductionLineFeed[]> {
+  try {
+    const { data, error } = await supabase
+      .from("production_lines")
+      .select("id, line_code, line_name, daily_production_capacity");
+
+    if (error) {
+      console.error("Failed to fetch all production lines:", error);
+      return [];
+    }
+
+    if (!data) {
+      return [];
+    }
+
+    return data.map((line: any) => ({
+      id: line.id,
+      production_line_id: line.id,
+      line_code: line.line_code,
+      line_name: line.line_name,
+      factory_name: "",
+      daily_capacity: line.daily_production_capacity || 0,
+    }));
+  } catch (error) {
+    console.error("Error fetching all production lines:", error);
+    return [];
+  }
+}
+
+
+/**
+ * Link a production line to a warehouse
+ */
+export async function linkProductionLineToWarehouse(
+  productionLineId: string,
+  warehouseId: string
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("warehouse_production_lines")
+      .insert({ production_line_id: productionLineId, warehouse_id: warehouseId });
+
+    if (error) {
+      console.error("Failed to link production line to warehouse:", error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Error linking production line to warehouse:", error);
+    return false;
+  }
+}
+
+
+/**
+ * Unlink a production line from a warehouse
+ */
+export async function unlinkProductionLineFromWarehouse(
+  productionLineId: string,
+  warehouseId: string
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("warehouse_production_lines")
+      .delete()
+      .eq("production_line_id", productionLineId)
+      .eq("warehouse_id", warehouseId);
+
+    if (error) {
+      console.error("Failed to unlink production line from warehouse:", error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Error unlinking production line from warehouse:", error);
+    return false;
   }
 }

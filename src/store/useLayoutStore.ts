@@ -491,9 +491,8 @@ function getSeedItems(zone: string): AnyItem[] {
     h: 4,
     rotation: 0,
     floors: 3,
-    rows: 1,
-    cols: 3,
-    numbering: 'col-major',
+    rows: 3, // Number of cells per floor
+    numbering: 'left-to-right',
     order: 'asc',
     perFloorLocations: false,
   };
@@ -509,9 +508,8 @@ function getSeedItems(zone: string): AnyItem[] {
     h: 4,
     rotation: 0,
     floors: 3,
-    rows: 1,
-    cols: 3,
-    numbering: 'col-major',
+    rows: 3, // Number of cells per floor
+    numbering: 'left-to-right',
     order: 'asc',
     perFloorLocations: false,
   };

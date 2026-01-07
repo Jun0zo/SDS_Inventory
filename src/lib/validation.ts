@@ -101,21 +101,17 @@ export function validateRack(item: AnyItem): ValidationError[] {
   }
   
   if (item.rows < 1) {
-    errors.push({ field: 'rows', message: 'Rows must be at least 1' });
+    errors.push({ field: 'rows', message: 'Cells per floor must be at least 1' });
   }
-  
-  if (item.cols < 1) {
-    errors.push({ field: 'cols', message: 'Columns must be at least 1' });
-  }
-  
+
   if (item.w < 1) {
     errors.push({ field: 'w', message: 'Width must be at least 1' });
   }
-  
+
   if (item.h < 1) {
     errors.push({ field: 'h', message: 'Height must be at least 1' });
   }
-  
+
   return errors;
 }
 
@@ -124,7 +120,7 @@ export function validateRack(item: AnyItem): ValidationError[] {
  */
 export function validateFlat(item: AnyItem): ValidationError[] {
   if (item.type !== 'flat') return [];
-  
+
   const errors: ValidationError[] = [];
   
   if (item.rows < 1) {

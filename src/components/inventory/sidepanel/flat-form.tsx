@@ -1,9 +1,10 @@
-import { FlatItem } from '@/types/inventory';
+import { FlatItem, ZoneType } from '@/types/inventory';
 import { useZoneStore } from '@/store/useZoneStore';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { useCallback, useState, useEffect } from 'react';
 
@@ -41,6 +42,26 @@ export function FlatForm({ item }: FlatFormProps) {
           onChange={(e) => setLocalLocation(e.target.value)}
           onBlur={handleLocationBlur}
         />
+      </div>
+
+      <div>
+        <Label htmlFor="zoneType">Zone Type</Label>
+        <Select
+          value={item.zoneType || 'standard'}
+          onValueChange={(value: ZoneType) => handleUpdate({ zoneType: value })}
+        >
+          <SelectTrigger id="zoneType">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="standard">Standard</SelectItem>
+            <SelectItem value="block">Block Zone</SelectItem>
+            <SelectItem value="flex">Flex Zone</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground mt-1">
+          Block/Flex: Max capacity = 0 (current stock only)
+        </p>
       </div>
 
       <Collapsible open={isAdvancedOpen} onOpenChange={setIsAdvancedOpen}>

@@ -108,10 +108,7 @@ export function FilterToolbar({
             if (onFilterModeChange) {
               onFilterModeChange(newMode);
             }
-            onFiltersChange({
-              ...filters,
-              showOnlyWithProductionLines: newMode === 'production_line',
-            });
+            // 배치상태처럼 정보만 표시하고 dimming 효과 없음
           }}
           size="sm"
           variant={filterMode === 'production_line' ? 'default' : 'outline'}

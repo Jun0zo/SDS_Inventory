@@ -1,13 +1,15 @@
-import { RackItem } from '@/types/inventory';
+import { RackItem, ZoneType } from '@/types/inventory';
 import { useZoneStore } from '@/store/useZoneStore';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, ChevronDown, ChevronRight, Edit3, Eye, Copy } from 'lucide-react';
 import { useCallback, useState, useEffect } from 'react';
 import { RackGridEditor } from './rack-grid-editor';
+import { calculateCapacity } from '@/lib/capacity';
 
 interface RackFormProps {
   item: RackItem;
@@ -44,6 +46,26 @@ export function RackForm({ item }: RackFormProps) {
           onChange={(e) => setLocalLocation(e.target.value)}
           onBlur={handleLocationBlur}
         />
+      </div>
+
+      <div>
+        <Label htmlFor="zoneType">Zone Type</Label>
+        <Select
+          value={item.zoneType || 'standard'}
+          onValueChange={(value: ZoneType) => handleUpdate({ zoneType: value })}
+        >
+          <SelectTrigger id="zoneType">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="standard">Standard</SelectItem>
+            <SelectItem value="block">Block Zone</SelectItem>
+            <SelectItem value="flex">Flex Zone</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground mt-1">
+          Block/Flex: Max capacity = 0 (current stock only)
+        </p>
       </div>
 
       <Collapsible open={isAdvancedOpen} onOpenChange={setIsAdvancedOpen}>
@@ -119,13 +141,13 @@ export function RackForm({ item }: RackFormProps) {
           />
         </div>
         <div>
-          <Label htmlFor="cols">Columns</Label>
+          <Label htmlFor="rows">Rows (Cells per floor)</Label>
           <Input
-            id="cols"
+            id="rows"
             type="number"
             min="1"
-            value={item.cols}
-            onChange={(e) => handleUpdate({ cols: parseInt(e.target.value) })}
+            value={item.rows}
+            onChange={(e) => handleUpdate({ rows: parseInt(e.target.value) })}
           />
         </div>
       </div>
@@ -136,30 +158,7 @@ export function RackForm({ item }: RackFormProps) {
         <Input
           id="totalMaxCapacity"
           type="number"
-          value={(() => {
-            // Calculate total capacity from grid data (all cells, regardless of availability)
-            // Get cellCapacity or initialize with default values
-            let cellCapacity = item.cellCapacity;
-
-            // If cellCapacity is not properly initialized, use default value of 1 per cell
-            if (!cellCapacity ||
-                cellCapacity.length !== item.floors ||
-                cellCapacity[0]?.length !== item.rows ||
-                cellCapacity[0]?.[0]?.length !== item.cols) {
-              // Return default: rows * cols * floors * 1 (default capacity per cell)
-              return item.rows * item.cols * item.floors;
-            }
-
-            let total = 0;
-            for (let floor = 0; floor < item.floors; floor++) {
-              for (let row = 0; row < item.rows; row++) {
-                for (let col = 0; col < item.cols; col++) {
-                  total += cellCapacity[floor]?.[row]?.[col] || 0;
-                }
-              }
-            }
-            return total;
-          })()}
+          value={calculateCapacity(item)}
           readOnly
           className="bg-muted"
         />

@@ -4,7 +4,7 @@ import { cn } from '@/lib/cn';
 import { applyRotationWH } from '@/lib/geometry';
 import { LocationInventorySummary } from '@/store/useLocationInventoryStore';
 import { calculateCapacity, calculateUtilization, getUtilizationColor } from '@/lib/capacity';
-import { Package, RefreshCw, AlertTriangle, Factory } from 'lucide-react';
+import { RefreshCw, Factory, Package } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { Badge } from '@/components/ui/badge';
@@ -50,11 +50,23 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false, filterMo
   const inventoryWithLoading = inventory as InventoryWithLoading | null;
   const isLoading = inventoryWithLoading?.loading;
 
-  // Calculate capacity and utilization - prefer MV data over item properties
-  const capacity = inventory?.max_capacity || calculateCapacity(item);
+  // Calculate capacity and utilization - use item properties as source of truth
+  const capacity = calculateCapacity(item);
   const currentCount = inventory?.total_items || 0; // Use row count instead of quantity
-  const utilization = inventory?.utilization_percentage || calculateUtilization(currentCount, capacity);
+  const utilization = calculateUtilization(currentCount, capacity);
   const utilizationColor = getUtilizationColor(utilization);
+
+  // Expected material status color
+  const getExpectedMaterialColor = () => {
+    if (!itemMetadata?.expected_major_category) {
+      return '#9ca3af'; // gray-400 - 설정 안됨
+    }
+    if (itemMetadata.has_material_variance) {
+      return '#ef4444'; // red-500 - 불일치
+    }
+    return '#10b981'; // green-500 - 일치
+  };
+  const expectedMaterialColor = getExpectedMaterialColor();
 
   // Handle resize mode mouse events
   useEffect(() => {
@@ -187,7 +199,7 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false, filterMo
           isDimmed && "opacity-30"
         )}
         style={{
-          borderColor: capacity > 0 ? utilizationColor : undefined,
+          borderColor: expectedMaterialColor,
         }}
       >
         <div className="flex h-full flex-col justify-between text-xs">
@@ -200,15 +212,6 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false, filterMo
             <div className="flex items-center gap-1 shrink-0">
               {isLoading && (
                 <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />
-              )}
-              {capacity > 0 && !isLoading && (
-                <Package className="h-3 w-3" style={{ color: utilizationColor }} />
-              )}
-              {/* Material Variance Indicator */}
-              {itemMetadata?.has_material_variance && (
-                <span title="Material mismatch detected">
-                  <AlertTriangle className="h-3 w-3 text-red-600" />
-                </span>
               )}
               {/* Unassigned Locations Indicator */}
               {itemMetadata?.has_unassigned_locations && (
@@ -279,8 +282,26 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false, filterMo
             </div>
           )}
 
+          {/* Block/Flex Zone: Show label and current stock only */}
+          {filterMode === 'none' && (item.zoneType === 'block' || item.zoneType === 'flex') && (
+            <div className="mt-1 pt-1 border-t">
+              <div className="flex items-center justify-between text-xs">
+                <span className={`font-medium px-1.5 py-0.5 rounded text-[10px] ${
+                  item.zoneType === 'block'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-blue-100 text-blue-700'
+                }`}>
+                  {item.zoneType === 'block' ? 'BLOCKED' : 'FLEX'}
+                </span>
+                <span className="text-muted-foreground">
+                  {currentCount} items
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Default: Show capacity/utilization when no filter is active */}
-          {filterMode === 'none' && capacity > 0 && (
+          {filterMode === 'none' && capacity > 0 && item.zoneType !== 'block' && item.zoneType !== 'flex' && (
             <div className="mt-1 pt-1 border-t">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-medium" style={{ color: utilizationColor }}>

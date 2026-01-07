@@ -60,7 +60,7 @@ export function LocationDetailDialog({
                     <div className="text-2xl font-bold">{capacity}</div>
                     <div className="text-xs text-muted-foreground mt-1">
                       {component.type === 'rack'
-                        ? `${component.floors}F × ${component.rows}R × ${component.cols}C`
+                        ? `${component.floors}F × ${component.rows} cells`
                         : `${component.rows}R × ${component.cols}C`}
                     </div>
                   </div>
