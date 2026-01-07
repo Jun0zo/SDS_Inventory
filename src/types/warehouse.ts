@@ -25,7 +25,7 @@ export type ProductionLineMaterial = {
 // Production Line
 export type ProductionLine = {
   id: string;
-  warehouse_id: string;
+  // warehouse_id removed - now using junction table warehouse_production_lines
   line_code: string;
   line_name: string;
   line_count: number; // 라인 수 (항상 1)
@@ -33,6 +33,7 @@ export type ProductionLine = {
   output_product_code?: string | null; // 생산되는 제품 코드 (선택사항)
   output_product_name?: string | null; // 생산되는 제품명 (선택사항)
   materials: ProductionLineMaterial[]; // BOM (Bill of Materials)
+  warehouse_ids: string[]; // Connected warehouse IDs via junction table
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;

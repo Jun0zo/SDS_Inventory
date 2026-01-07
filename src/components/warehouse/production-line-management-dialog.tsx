@@ -30,7 +30,8 @@ export function ProductionLineManagementDialog({
     if (!warehouse) return;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/production-lines/${warehouse.id}`);
+      // Use new endpoint with warehouse_id as query param
+      const response = await fetch(`${BASE_URL}/api/production-lines/warehouse/${warehouse.id}`);
       if (!response.ok) {
         throw new Error('Failed to load production lines');
       }
@@ -46,13 +47,21 @@ export function ProductionLineManagementDialog({
   };
 
   const handleAddLine = async (line: Omit<ProductionLine, 'id' | 'created_at' | 'updated_at'>) => {
+    if (!warehouse) return;
+
     try {
+      // Include current warehouse ID in warehouse_ids
+      const lineData = {
+        ...line,
+        warehouse_ids: [warehouse.id, ...(line.warehouse_ids || []).filter(id => id !== warehouse.id)]
+      };
+
       const response = await fetch(`${BASE_URL}/api/production-lines`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(line),
+        body: JSON.stringify(lineData),
       });
 
       if (!response.ok) {

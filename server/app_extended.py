@@ -38,9 +38,12 @@ from supabase_client import (
     list_warehouse_bindings,
     delete_warehouse_binding,
     get_production_lines,
+    get_all_production_lines,
     create_production_line,
     update_production_line,
     delete_production_line,
+    link_production_line_to_warehouse,
+    unlink_production_line_from_warehouse,
     supabase
 )
 try:
@@ -1492,9 +1495,9 @@ async def delete_minor_category(
 # PRODUCTION LINES API
 # ============================================
 
-@app_ext.get("/production-lines/{warehouse_id}", response_model=ProductionLineListResponse)
-async def get_production_lines_for_warehouse(warehouse_id: str):
-    """Get all production lines for a warehouse"""
+@app_ext.get("/production-lines", response_model=ProductionLineListResponse)
+async def get_all_production_lines_endpoint(warehouse_id: Optional[str] = Query(None)):
+    """Get all production lines, optionally filtered by warehouse"""
     try:
         lines = await get_production_lines(warehouse_id)
         return ProductionLineListResponse(
@@ -1507,14 +1510,33 @@ async def get_production_lines_for_warehouse(warehouse_id: str):
         logger.error(f"Error getting production lines: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app_ext.get("/production-lines/warehouse/{warehouse_id}", response_model=ProductionLineListResponse)
+async def get_production_lines_for_warehouse(warehouse_id: str):
+    """Get production lines for a specific warehouse (backward compatible endpoint)"""
+    try:
+        lines = await get_production_lines(warehouse_id)
+        return ProductionLineListResponse(
+            production_lines=[ProductionLineExtended(**line) for line in lines],
+            total_count=len(lines)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting production lines: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app_ext.post("/production-lines", response_model=ProductionLineResponse)
 async def create_production_line_endpoint(request: ProductionLineCreateRequest):
-    """Create a new production line"""
+    """Create a new production line with optional warehouse associations"""
     try:
-        # Validate warehouse exists
-        warehouse_result = supabase.table('warehouses').select('id').eq('id', request.warehouse_id).execute()
-        if not warehouse_result.data:
-            raise HTTPException(status_code=404, detail="Warehouse not found")
+        # Validate warehouses exist if provided
+        if request.warehouse_ids:
+            for wid in request.warehouse_ids:
+                warehouse_result = supabase.table('warehouses').select('id').eq('id', wid).execute()
+                if not warehouse_result.data:
+                    raise HTTPException(status_code=404, detail=f"Warehouse {wid} not found")
 
         line_data = request.dict()
         line = await create_production_line(line_data)
@@ -1524,6 +1546,48 @@ async def create_production_line_endpoint(request: ProductionLineCreateRequest):
         raise
     except Exception as e:
         logger.error(f"Error creating production line: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app_ext.post("/production-lines/{line_id}/warehouses/{warehouse_id}")
+async def link_line_to_warehouse(line_id: str, warehouse_id: str):
+    """Link a production line to a warehouse"""
+    try:
+        # Check if line exists
+        existing_line = supabase.table('production_lines').select('id').eq('id', line_id).execute()
+        if not existing_line.data:
+            raise HTTPException(status_code=404, detail="Production line not found")
+
+        # Check if warehouse exists
+        existing_warehouse = supabase.table('warehouses').select('id').eq('id', warehouse_id).execute()
+        if not existing_warehouse.data:
+            raise HTTPException(status_code=404, detail="Warehouse not found")
+
+        success = await link_production_line_to_warehouse(line_id, warehouse_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to link production line to warehouse")
+
+        return {"message": "Production line linked to warehouse successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error linking production line to warehouse: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app_ext.delete("/production-lines/{line_id}/warehouses/{warehouse_id}")
+async def unlink_line_from_warehouse(line_id: str, warehouse_id: str):
+    """Unlink a production line from a warehouse"""
+    try:
+        success = await unlink_production_line_from_warehouse(line_id, warehouse_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Link not found")
+
+        return {"message": "Production line unlinked from warehouse successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error unlinking production line from warehouse: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app_ext.put("/production-lines/{line_id}", response_model=ProductionLineResponse)

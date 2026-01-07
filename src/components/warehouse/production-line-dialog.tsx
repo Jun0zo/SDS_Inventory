@@ -14,7 +14,7 @@ interface ProductionLineDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (line: Omit<ProductionLine, 'id' | 'created_at' | 'updated_at'>) => void;
-  warehouseId: string;
+  warehouseId?: string; // Optional - if provided, line will be linked to this warehouse
   existingLine?: ProductionLine;
 }
 
@@ -250,9 +250,12 @@ export function ProductionLineDialog({
       return;
     }
 
+    // Build warehouse_ids array - include current warehouseId if provided
+    const warehouseIdsToSave = warehouseId
+      ? [warehouseId, ...(existingLine?.warehouse_ids || []).filter(id => id !== warehouseId)]
+      : existingLine?.warehouse_ids || [];
 
     onSave({
-      warehouse_id: warehouseId,
       line_code: lineCode.trim(),
       line_name: lineName.trim(),
       line_count: 1, // Always 1 since line count is removed
@@ -260,6 +263,7 @@ export function ProductionLineDialog({
       output_product_code: outputProductCode.trim() || null,
       output_product_name: outputProductName.trim() || null,
       materials: materials,
+      warehouse_ids: warehouseIdsToSave,
       created_by: null,
     });
 

@@ -818,12 +818,12 @@ export async function getMaterials(_warehouseCodes: string[]): Promise<Array<{co
 }
 
 /**
- * Get production lines for warehouses by warehouse IDs
+ * Get production lines for warehouses by warehouse IDs (via junction table)
  */
 export async function getProductionLinesByIds(warehouseIds: string[]): Promise<Array<{
   id: string;
   name: string;
-  warehouse_id: string;
+  warehouse_ids: string[];
   daily_production_capacity: number;
   materials: Array<{
     id: string;
@@ -834,12 +834,39 @@ export async function getProductionLinesByIds(warehouseIds: string[]): Promise<A
   }>;
 }>> {
   try {
+    // First get production line IDs linked to these warehouses via junction table
+    const { data: links, error: linkError } = await supabase
+      .from('warehouse_production_lines')
+      .select('production_line_id, warehouse_id')
+      .in('warehouse_id', warehouseIds);
+
+    if (linkError) {
+      console.warn('Error fetching warehouse-production line links:', linkError);
+      return [];
+    }
+
+    if (!links || links.length === 0) {
+      console.log('🏭 getProductionLinesByIds: No production lines linked to warehouses', { warehouseIds });
+      return [];
+    }
+
+    // Get unique production line IDs
+    const lineIds = [...new Set(links.map(l => l.production_line_id))];
+
+    // Build a map of production line ID to warehouse IDs
+    const lineWarehouseMap = new Map<string, string[]>();
+    links.forEach(link => {
+      const current = lineWarehouseMap.get(link.production_line_id) || [];
+      current.push(link.warehouse_id);
+      lineWarehouseMap.set(link.production_line_id, current);
+    });
+
+    // Fetch production lines with materials
     const { data, error } = await supabase
       .from('production_lines')
       .select(`
         id,
         line_name,
-        warehouse_id,
         daily_production_capacity,
         production_line_materials (
           id,
@@ -849,7 +876,7 @@ export async function getProductionLinesByIds(warehouseIds: string[]): Promise<A
           unit
         )
       `)
-      .in('warehouse_id', warehouseIds);
+      .in('id', lineIds);
 
     if (error) {
       console.warn('Error fetching production lines:', error);
@@ -859,7 +886,7 @@ export async function getProductionLinesByIds(warehouseIds: string[]): Promise<A
     const productionLines = data?.map(line => ({
       id: line.id,
       name: line.line_name,
-      warehouse_id: line.warehouse_id,
+      warehouse_ids: lineWarehouseMap.get(line.id) || [],
       daily_production_capacity: line.daily_production_capacity,
       materials: line.production_line_materials || []
     })) || [];
