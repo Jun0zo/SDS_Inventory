@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useWarehouseStore } from '@/store/useWarehouseStore';
+import { useFactoryStore } from '@/store/useFactoryStore';
 import { useZoneStore } from '@/store/useZoneStore';
 import { useTranslation } from '@/store/useLanguageStore';
 import { getRecentActivity } from '@/lib/supabase/layouts';
@@ -10,7 +11,7 @@ import {
   getSlowMovingItems,
   getInventoryDiscrepancies,
   getStockStatusDistribution,
-  getProductionLinesByIds,
+  getProductionLinesByFactoryId,
   getMaterialStock,
   type ExpiringItem,
   type SlowMovingItem,
@@ -23,6 +24,7 @@ import { StockStatusDetailModal } from '@/components/dashboard/stock-status-deta
 import { StockDaysDetailModal } from '@/components/dashboard/stock-days-detail-modal';
 import { ExpiringItemsDetailModal } from '@/components/dashboard/expiring-items-detail-modal';
 import { MaterialCapacitySummary } from '@/components/dashboard/material-capacity-summary';
+import { FactoryFilter } from '@/components/dashboard/factory-filter';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -129,9 +131,13 @@ export function DashboardPage() {
     selectedWarehouseIds,
     getSelectedWarehouses,
   } = useWarehouseStore();
+  const {
+    selectedFactoryId,
+    loadFactories,
+  } = useFactoryStore();
   const dataVersion = useZoneStore(state => state.dataVersion);
   const t = useTranslation();
-  
+
   const [activity, setActivity] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [heatmapView, setHeatmapView] = useState<'list' | 'treemap'>('list');
@@ -139,7 +145,7 @@ export function DashboardPage() {
   const [stockStatusModalOpen, setStockStatusModalOpen] = useState(false);
   const [stockDaysModalOpen, setStockDaysModalOpen] = useState(false);
   const [expiringItemsModalOpen, setExpiringItemsModalOpen] = useState(false);
-  
+
   // Insights data state
   const [inventoryStats, setInventoryStats] = useState({
     total_quantity: 0,
@@ -162,9 +168,14 @@ export function DashboardPage() {
   const [stockDaysData, setStockDaysData] = useState<Map<string, StockInfo>>(new Map());
   const [stockDaysByLine, setStockDaysByLine] = useState<Map<string, any>>(new Map());
 
+  // Load factories on mount
+  useEffect(() => {
+    loadFactories();
+  }, [loadFactories]);
+
   useEffect(() => {
     // Calculate actual BASE_URL used for API calls (same logic as insights.ts)
-    const actualBaseUrl = import.meta.env.VITE_ETL_BASE_URL 
+    const actualBaseUrl = import.meta.env.VITE_ETL_BASE_URL
       || (import.meta.env.PROD ? '' : 'http://localhost:8787');
 
     // Log environment variables to console for debugging
@@ -182,11 +193,11 @@ export function DashboardPage() {
     const abortController = new AbortController();
     loadData(abortController.signal);
 
-    // Cleanup: abort any pending requests when component unmounts or warehouse selection changes
+    // Cleanup: abort any pending requests when component unmounts or warehouse/factory selection changes
     return () => {
       abortController.abort();
     };
-  }, [selectedWarehouseIds, dataVersion]);
+  }, [selectedWarehouseIds, selectedFactoryId, dataVersion]);
 
   const loadData = async (signal?: AbortSignal) => {
     setLoading(true);
@@ -228,7 +239,7 @@ export function DashboardPage() {
         return;
       }
 
-      // Load all data in parallel
+      // Load warehouse-based data in parallel
       const [
         activityData,
         stats,
@@ -237,7 +248,6 @@ export function DashboardPage() {
         slowMoving,
         discreps,
         status,
-        prodLines,
         materialStock,
       ] = await Promise.all([
         getRecentActivity(10),
@@ -247,9 +257,13 @@ export function DashboardPage() {
         getSlowMovingItems(warehouseIds),
         getInventoryDiscrepancies(warehouseIds),
         getStockStatusDistribution(warehouseCodes),
-        getProductionLinesByIds(warehouseIds),
         getMaterialStock(warehouseCodes),
       ]);
+
+      // Load production lines based on selected factory (if any)
+      const prodLines = selectedFactoryId
+        ? await getProductionLinesByFactoryId(selectedFactoryId)
+        : [];
 
       // Check if request was aborted after fetch completes
       if (signal?.aborted) {
@@ -403,12 +417,20 @@ export function DashboardPage() {
     <>
       {/* Page Context Header */}
       <PageHeader>
-        <div className="flex items-center">
+        <div className="flex items-center justify-between w-full">
           <div>
             <h1 className="text-xl font-semibold">Dashboard</h1>
             {hasSelection && (
               <p className="text-xs text-muted-foreground mt-0.5">
                 {totalWarehouses} warehouse{totalWarehouses !== 1 ? 's' : ''} selected
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            <FactoryFilter />
+            {selectedFactoryId && (
+              <p className="text-xs text-muted-foreground">
+                Stock days calculated for selected factory
               </p>
             )}
           </div>

@@ -19,6 +19,11 @@ from models_extended import (
     SplitValuesResponse,
     SplitValueInfo,
     ZoneCapacityResponse,
+    FactoryExtended,
+    FactoryListResponse,
+    FactoryResponse,
+    FactoryCreateRequest,
+    FactoryUpdateRequest,
     ProductionLineExtended,
     ProductionLineListResponse,
     ProductionLineResponse,
@@ -37,13 +42,16 @@ from supabase_client import (
     call_snapshot_function,
     list_warehouse_bindings,
     delete_warehouse_binding,
+    get_factories,
+    get_factory,
+    create_factory,
+    update_factory,
+    delete_factory,
     get_production_lines,
     get_all_production_lines,
     create_production_line,
     update_production_line,
     delete_production_line,
-    link_production_line_to_warehouse,
-    unlink_production_line_from_warehouse,
     supabase
 )
 try:
@@ -1492,14 +1500,115 @@ async def delete_minor_category(
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================
-# PRODUCTION LINES API
+# FACTORY API
 # ============================================
 
-@app_ext.get("/production-lines", response_model=ProductionLineListResponse)
-async def get_all_production_lines_endpoint(warehouse_id: Optional[str] = Query(None)):
-    """Get all production lines, optionally filtered by warehouse"""
+@app_ext.get("/factories", response_model=FactoryListResponse)
+async def get_factories_endpoint():
+    """Get all factories with production line counts"""
     try:
-        lines = await get_production_lines(warehouse_id)
+        factories = await get_factories()
+        return FactoryListResponse(
+            factories=[FactoryExtended(**f) for f in factories],
+            total_count=len(factories)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting factories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app_ext.get("/factories/{factory_id}", response_model=FactoryResponse)
+async def get_factory_endpoint(factory_id: str):
+    """Get a single factory by ID"""
+    try:
+        factory = await get_factory(factory_id)
+        if not factory:
+            raise HTTPException(status_code=404, detail="Factory not found")
+        return FactoryResponse(factory=FactoryExtended(**factory))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting factory: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app_ext.post("/factories", response_model=FactoryResponse)
+async def create_factory_endpoint(request: FactoryCreateRequest):
+    """Create a new factory"""
+    try:
+        # Check if code already exists
+        existing = supabase.table('factories').select('id').eq('code', request.code).execute()
+        if existing.data:
+            raise HTTPException(status_code=400, detail=f"Factory code '{request.code}' already exists")
+
+        factory_data = request.dict()
+        factory = await create_factory(factory_data)
+        return FactoryResponse(factory=FactoryExtended(**factory))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating factory: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app_ext.put("/factories/{factory_id}", response_model=FactoryResponse)
+async def update_factory_endpoint(factory_id: str, request: FactoryUpdateRequest):
+    """Update a factory"""
+    try:
+        # Check if factory exists
+        existing = await get_factory(factory_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Factory not found")
+
+        # If updating code, check for duplicates
+        if request.code and request.code != existing['code']:
+            duplicate = supabase.table('factories').select('id').eq('code', request.code).execute()
+            if duplicate.data:
+                raise HTTPException(status_code=400, detail=f"Factory code '{request.code}' already exists")
+
+        update_data = {k: v for k, v in request.dict().items() if v is not None}
+        factory = await update_factory(factory_id, update_data)
+        return FactoryResponse(factory=FactoryExtended(**factory))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating factory: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app_ext.delete("/factories/{factory_id}")
+async def delete_factory_endpoint(factory_id: str):
+    """Delete a factory (cascade deletes production lines)"""
+    try:
+        # Check if factory exists
+        existing = await get_factory(factory_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Factory not found")
+
+        success = await delete_factory(factory_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete factory")
+
+        return {"message": "Factory deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting factory: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app_ext.get("/factories/{factory_id}/production-lines", response_model=ProductionLineListResponse)
+async def get_factory_production_lines(factory_id: str):
+    """Get production lines for a specific factory"""
+    try:
+        # Check if factory exists
+        existing = await get_factory(factory_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Factory not found")
+
+        lines = await get_production_lines(factory_id)
         return ProductionLineListResponse(
             production_lines=[ProductionLineExtended(**line) for line in lines],
             total_count=len(lines)
@@ -1507,15 +1616,19 @@ async def get_all_production_lines_endpoint(warehouse_id: Optional[str] = Query(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting production lines: {e}")
+        logger.error(f"Error getting factory production lines: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app_ext.get("/production-lines/warehouse/{warehouse_id}", response_model=ProductionLineListResponse)
-async def get_production_lines_for_warehouse(warehouse_id: str):
-    """Get production lines for a specific warehouse (backward compatible endpoint)"""
+# ============================================
+# PRODUCTION LINES API
+# ============================================
+
+@app_ext.get("/production-lines", response_model=ProductionLineListResponse)
+async def get_all_production_lines_endpoint(factory_id: Optional[str] = Query(None)):
+    """Get all production lines, optionally filtered by factory"""
     try:
-        lines = await get_production_lines(warehouse_id)
+        lines = await get_production_lines(factory_id)
         return ProductionLineListResponse(
             production_lines=[ProductionLineExtended(**line) for line in lines],
             total_count=len(lines)
@@ -1529,14 +1642,12 @@ async def get_production_lines_for_warehouse(warehouse_id: str):
 
 @app_ext.post("/production-lines", response_model=ProductionLineResponse)
 async def create_production_line_endpoint(request: ProductionLineCreateRequest):
-    """Create a new production line with optional warehouse associations"""
+    """Create a new production line (must belong to a factory)"""
     try:
-        # Validate warehouses exist if provided
-        if request.warehouse_ids:
-            for wid in request.warehouse_ids:
-                warehouse_result = supabase.table('warehouses').select('id').eq('id', wid).execute()
-                if not warehouse_result.data:
-                    raise HTTPException(status_code=404, detail=f"Warehouse {wid} not found")
+        # Validate factory exists
+        factory = await get_factory(request.factory_id)
+        if not factory:
+            raise HTTPException(status_code=404, detail=f"Factory {request.factory_id} not found")
 
         line_data = request.dict()
         line = await create_production_line(line_data)
@@ -1549,47 +1660,6 @@ async def create_production_line_endpoint(request: ProductionLineCreateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app_ext.post("/production-lines/{line_id}/warehouses/{warehouse_id}")
-async def link_line_to_warehouse(line_id: str, warehouse_id: str):
-    """Link a production line to a warehouse"""
-    try:
-        # Check if line exists
-        existing_line = supabase.table('production_lines').select('id').eq('id', line_id).execute()
-        if not existing_line.data:
-            raise HTTPException(status_code=404, detail="Production line not found")
-
-        # Check if warehouse exists
-        existing_warehouse = supabase.table('warehouses').select('id').eq('id', warehouse_id).execute()
-        if not existing_warehouse.data:
-            raise HTTPException(status_code=404, detail="Warehouse not found")
-
-        success = await link_production_line_to_warehouse(line_id, warehouse_id)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to link production line to warehouse")
-
-        return {"message": "Production line linked to warehouse successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error linking production line to warehouse: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app_ext.delete("/production-lines/{line_id}/warehouses/{warehouse_id}")
-async def unlink_line_from_warehouse(line_id: str, warehouse_id: str):
-    """Unlink a production line from a warehouse"""
-    try:
-        success = await unlink_production_line_from_warehouse(line_id, warehouse_id)
-        if not success:
-            raise HTTPException(status_code=404, detail="Link not found")
-
-        return {"message": "Production line unlinked from warehouse successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error unlinking production line from warehouse: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app_ext.put("/production-lines/{line_id}", response_model=ProductionLineResponse)
 async def update_production_line_endpoint(line_id: str, request: ProductionLineUpdateRequest):
     """Update a production line"""
@@ -1598,6 +1668,12 @@ async def update_production_line_endpoint(line_id: str, request: ProductionLineU
         existing_result = supabase.table('production_lines').select('id').eq('id', line_id).execute()
         if not existing_result.data:
             raise HTTPException(status_code=404, detail="Production line not found")
+
+        # If updating factory_id, validate factory exists
+        if request.factory_id:
+            factory = await get_factory(request.factory_id)
+            if not factory:
+                raise HTTPException(status_code=404, detail=f"Factory {request.factory_id} not found")
 
         update_data = {k: v for k, v in request.dict().items() if v is not None}
         line = await update_production_line(line_id, update_data)
@@ -1608,6 +1684,7 @@ async def update_production_line_endpoint(line_id: str, request: ProductionLineU
     except Exception as e:
         logger.error(f"Error updating production line: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app_ext.delete("/production-lines/{line_id}")
 async def delete_production_line_endpoint(line_id: str):

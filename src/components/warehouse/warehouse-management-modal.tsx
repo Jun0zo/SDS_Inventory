@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useWarehouseStore } from '@/store/useWarehouseStore';
 import { useWarehouseBindingStore } from '@/store/useWarehouseBindingStore';
-import { Warehouse, ProductionLine } from '@/types/warehouse';
+import { useFactoryStore } from '@/store/useFactoryStore';
+import { Warehouse, Factory as FactoryType } from '@/types/warehouse';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,8 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WarehouseEditDialog } from './warehouse-edit-dialog';
-import { ProductionLineDialog } from './production-line-dialog';
+import { FactoryEditDialog } from './factory-edit-dialog';
+import { FactoryProductionLinesDialog } from './factory-production-lines-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,11 +36,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Edit2, Trash2, Plus, Building2, Factory } from 'lucide-react';
-import { ProductionLineManagementDialog } from './production-line-management-dialog';
 import { toast } from '@/hooks/use-toast';
-
-const BASE_URL = import.meta.env.VITE_ETL_BASE_URL
-  || (import.meta.env.PROD ? '' : 'http://localhost:8787');
 
 interface WarehouseManagementModalProps {
   open: boolean;
@@ -48,47 +46,28 @@ interface WarehouseManagementModalProps {
 export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManagementModalProps) {
   const { warehouses, remove } = useWarehouseStore();
   const { getBinding, loadBindings } = useWarehouseBindingStore();
+  const { factories, loadFactories, createFactory, updateFactory, removeFactory } = useFactoryStore();
 
+  // Warehouse state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [warehouseToDelete, setWarehouseToDelete] = useState<Warehouse | null>(null);
-  const [productionLineDialogOpen, setProductionLineDialogOpen] = useState(false);
-  const [productionLineWarehouse, setProductionLineWarehouse] = useState<Warehouse | null>(null);
-  const [lineCounts, setLineCounts] = useState<Record<string, number>>({});
 
-  // Production Lines state
-  const [allProductionLines, setAllProductionLines] = useState<ProductionLine[]>([]);
-  const [lineDialogOpen, setLineDialogOpen] = useState(false);
-  const [selectedLine, setSelectedLine] = useState<ProductionLine | null>(null);
-  const [lineDeleteDialogOpen, setLineDeleteDialogOpen] = useState(false);
-  const [lineToDelete, setLineToDelete] = useState<ProductionLine | null>(null);
+  // Factory state
+  const [factoryEditDialogOpen, setFactoryEditDialogOpen] = useState(false);
+  const [selectedFactory, setSelectedFactory] = useState<FactoryType | null>(null);
+  const [factoryDeleteDialogOpen, setFactoryDeleteDialogOpen] = useState(false);
+  const [factoryToDelete, setFactoryToDelete] = useState<FactoryType | null>(null);
+  const [factoryLinesDialogOpen, setFactoryLinesDialogOpen] = useState(false);
+  const [factoryForLines, setFactoryForLines] = useState<FactoryType | null>(null);
 
   useEffect(() => {
     if (open) {
       loadBindings();
-      loadLineCounts();
-      loadAllProductionLines();
+      loadFactories(true);
     }
   }, [open, warehouses]);
-
-  const loadAllProductionLines = async () => {
-    try {
-      const response = await fetch(`${BASE_URL}/api/production-lines`);
-      if (!response.ok) {
-        throw new Error('Failed to load production lines');
-      }
-      const data = await response.json();
-      setAllProductionLines(data.production_lines || []);
-    } catch (error: any) {
-      console.error('Failed to load production lines:', error);
-      toast({
-        title: 'Failed to load production lines',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
 
   const handleEdit = (warehouse: Warehouse) => {
     setSelectedWarehouse(warehouse);
@@ -113,49 +92,6 @@ export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManage
     }
   };
 
-  const loadLineCounts = async () => {
-    try {
-      const counts: Record<string, number> = {};
-
-      // Load line counts for all warehouses
-      await Promise.all(
-        warehouses.map(async (warehouse) => {
-          try {
-            const response = await fetch(`${BASE_URL}/api/production-lines/warehouse/${warehouse.id}`);
-            if (response.ok) {
-              const data = await response.json();
-              counts[warehouse.id] = data.production_lines?.length || 0;
-            } else {
-              counts[warehouse.id] = 0;
-            }
-          } catch (error) {
-            console.error(`Failed to load line count for warehouse ${warehouse.id}:`, error);
-            counts[warehouse.id] = 0;
-          }
-        })
-      );
-
-      setLineCounts(counts);
-    } catch (error) {
-      console.error('Failed to load line counts:', error);
-    }
-  };
-
-  const handleManageProductionLines = (warehouse: Warehouse) => {
-    setProductionLineWarehouse(warehouse);
-    setProductionLineDialogOpen(true);
-  };
-
-  const handleProductionLineDialogClose = () => {
-    setProductionLineDialogOpen(false);
-    setProductionLineWarehouse(null);
-    // Reload line counts when dialog closes
-    if (open) {
-      loadLineCounts();
-      loadAllProductionLines();
-    }
-  };
-
   const getBindingInfo = (warehouse: Warehouse) => {
     const binding = getBinding(warehouse.code);
     if (!binding) return { wmsCount: 0, sapCount: 0 };
@@ -166,108 +102,61 @@ export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManage
     };
   };
 
-  // Production Line handlers
-  const handleCreateLine = () => {
-    setSelectedLine(null);
-    setLineDialogOpen(true);
+  // Factory handlers
+  const handleCreateFactory = () => {
+    setSelectedFactory(null);
+    setFactoryEditDialogOpen(true);
   };
 
-  const handleEditLine = (line: ProductionLine) => {
-    setSelectedLine(line);
-    setLineDialogOpen(true);
+  const handleEditFactory = (factory: FactoryType) => {
+    setSelectedFactory(factory);
+    setFactoryEditDialogOpen(true);
   };
 
-  const handleDeleteLineClick = (line: ProductionLine) => {
-    setLineToDelete(line);
-    setLineDeleteDialogOpen(true);
+  const handleDeleteFactoryClick = (factory: FactoryType) => {
+    setFactoryToDelete(factory);
+    setFactoryDeleteDialogOpen(true);
   };
 
-  const handleSaveLine = async (line: Omit<ProductionLine, 'id' | 'created_at' | 'updated_at'>) => {
+  const handleDeleteFactoryConfirm = async () => {
+    if (factoryToDelete) {
+      try {
+        await removeFactory(factoryToDelete.id);
+        setFactoryDeleteDialogOpen(false);
+        setFactoryToDelete(null);
+      } catch (error) {
+        // Error handling is done in the store
+      }
+    }
+  };
+
+  const handleManageFactoryLines = (factory: FactoryType) => {
+    setFactoryForLines(factory);
+    setFactoryLinesDialogOpen(true);
+  };
+
+  const handleFactoryLinesDialogClose = () => {
+    setFactoryLinesDialogOpen(false);
+    setFactoryForLines(null);
+    // Reload factories to update production_line_count
+    loadFactories(true);
+  };
+
+  const handleSaveFactory = async (factory: Omit<FactoryType, 'id' | 'production_line_count' | 'created_at' | 'updated_at' | 'created_by'>) => {
     try {
-      if (selectedLine) {
-        // Update existing line
-        const response = await fetch(`${BASE_URL}/api/production-lines/${selectedLine.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(line),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to update production line');
-        }
-
-        toast({
-          title: 'Production line updated',
-          description: `${line.line_name} has been updated successfully.`,
-        });
+      if (selectedFactory) {
+        await updateFactory(selectedFactory.id, factory);
       } else {
-        // Create new line
-        const response = await fetch(`${BASE_URL}/api/production-lines`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(line),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to create production line');
-        }
-
-        toast({
-          title: 'Production line created',
-          description: `${line.line_name} has been created successfully.`,
-        });
+        await createFactory(factory);
       }
-
-      setLineDialogOpen(false);
-      loadAllProductionLines();
-      loadLineCounts();
+      setFactoryEditDialogOpen(false);
     } catch (error: any) {
       toast({
-        title: selectedLine ? 'Failed to update production line' : 'Failed to create production line',
+        title: selectedFactory ? 'Failed to update factory' : 'Failed to create factory',
         description: error.message,
         variant: 'destructive',
       });
     }
-  };
-
-  const handleDeleteLineConfirm = async () => {
-    if (!lineToDelete) return;
-
-    try {
-      const response = await fetch(`${BASE_URL}/api/production-lines/${lineToDelete.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete production line');
-      }
-
-      toast({
-        title: 'Production line deleted',
-        description: 'The production line has been deleted successfully.',
-      });
-
-      setLineDeleteDialogOpen(false);
-      setLineToDelete(null);
-      loadAllProductionLines();
-      loadLineCounts();
-    } catch (error: any) {
-      toast({
-        title: 'Failed to delete production line',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const getWarehouseNames = (warehouseIds: string[]) => {
-    return warehouseIds
-      .map(id => warehouses.find(w => w.id === id)?.name || 'Unknown')
-      .join(', ') || 'No warehouses';
   };
 
   return (
@@ -290,9 +179,9 @@ export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManage
                 <Building2 className="h-4 w-4 mr-2" />
                 Warehouses
               </TabsTrigger>
-              <TabsTrigger value="production-lines">
+              <TabsTrigger value="factories">
                 <Factory className="h-4 w-4 mr-2" />
-                Production Lines
+                Factories
               </TabsTrigger>
             </TabsList>
 
@@ -315,14 +204,13 @@ export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManage
                       <TableHead>Name</TableHead>
                       <TableHead>Systems</TableHead>
                       <TableHead>Data Sources</TableHead>
-                      <TableHead>Production</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {warehouses.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground">
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
                           No warehouses configured yet
                         </TableCell>
                       </TableRow>
@@ -366,21 +254,6 @@ export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManage
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleManageProductionLines(warehouse)}
-                              >
-                                <Factory className="h-4 w-4 mr-1" />
-                                Lines
-                                {lineCounts[warehouse.id] > 0 && (
-                                  <Badge variant="secondary" className="ml-1 text-xs">
-                                    {lineCounts[warehouse.id]}
-                                  </Badge>
-                                )}
-                              </Button>
-                            </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
                                 <Button
@@ -412,12 +285,12 @@ export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManage
               </p>
             </TabsContent>
 
-            {/* Production Lines Tab */}
-            <TabsContent value="production-lines" className="space-y-4">
+            {/* Factories Tab */}
+            <TabsContent value="factories" className="space-y-4">
               <div className="flex justify-end">
-                <Button onClick={handleCreateLine} size="sm">
+                <Button onClick={handleCreateFactory} size="sm">
                   <Plus className="mr-2 h-4 w-4" />
-                  New Production Line
+                  New Factory
                 </Button>
               </div>
 
@@ -425,50 +298,58 @@ export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManage
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Line Code</TableHead>
-                      <TableHead>Line Name</TableHead>
-                      <TableHead>Daily Capacity</TableHead>
-                      <TableHead>Materials</TableHead>
-                      <TableHead>Warehouses</TableHead>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Production Lines</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allProductionLines.length === 0 ? (
+                    {factories.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground">
-                          No production lines configured yet
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          No factories configured yet
                         </TableCell>
                       </TableRow>
                     ) : (
-                      allProductionLines.map((line) => (
-                        <TableRow key={line.id}>
+                      factories.map((factory) => (
+                        <TableRow key={factory.id}>
                           <TableCell className="font-mono font-medium">
-                            {line.line_code}
+                            {factory.code}
                           </TableCell>
-                          <TableCell>{line.line_name}</TableCell>
-                          <TableCell>{line.daily_production_capacity.toLocaleString()}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="text-xs">
-                              {line.materials?.length || 0} materials
-                            </Badge>
-                          </TableCell>
+                          <TableCell>{factory.name}</TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
-                            {getWarehouseNames(line.warehouse_ids || [])}
+                            {factory.description || '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleManageFactoryLines(factory)}
+                            >
+                              <Factory className="h-4 w-4 mr-1" />
+                              Lines
+                              {factory.production_line_count > 0 && (
+                                <Badge variant="secondary" className="ml-1 text-xs">
+                                  {factory.production_line_count}
+                                </Badge>
+                              )}
+                            </Button>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleEditLine(line)}
+                                onClick={() => handleEditFactory(factory)}
                               >
                                 <Edit2 className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleDeleteLineClick(line)}
+                                onClick={() => handleDeleteFactoryClick(factory)}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -482,7 +363,7 @@ export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManage
               </ScrollArea>
 
               <p className="text-xs text-muted-foreground">
-                Production lines can be linked to multiple warehouses. Edit a line to manage warehouse associations.
+                Click "Lines" to manage production lines for each factory.
               </p>
             </TabsContent>
           </Tabs>
@@ -515,38 +396,40 @@ export function WarehouseManagementModal({ open, onOpenChange }: WarehouseManage
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Production Line Edit/Create Dialog */}
-      <ProductionLineDialog
-        open={lineDialogOpen}
-        onOpenChange={setLineDialogOpen}
-        onSave={handleSaveLine}
-        existingLine={selectedLine || undefined}
+      {/* Factory Edit/Create Dialog */}
+      <FactoryEditDialog
+        open={factoryEditDialogOpen}
+        onOpenChange={setFactoryEditDialogOpen}
+        factory={selectedFactory}
+        onSave={handleSaveFactory}
       />
 
-      {/* Production Line Delete Confirmation Dialog */}
-      <AlertDialog open={lineDeleteDialogOpen} onOpenChange={setLineDeleteDialogOpen}>
+      {/* Factory Delete Confirmation Dialog */}
+      <AlertDialog open={factoryDeleteDialogOpen} onOpenChange={setFactoryDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Production Line</AlertDialogTitle>
+            <AlertDialogTitle>Delete Factory</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete production line "{lineToDelete?.line_name}" ({lineToDelete?.line_code})?
+              Are you sure you want to delete factory "{factoryToDelete?.name}" ({factoryToDelete?.code})?
+              This will also delete all production lines associated with this factory.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteLineConfirm} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction onClick={handleDeleteFactoryConfirm} className="bg-destructive text-destructive-foreground">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Warehouse-specific Production Line Management Dialog (old UI) */}
-      <ProductionLineManagementDialog
-        open={productionLineDialogOpen}
-        onOpenChange={handleProductionLineDialogClose}
-        warehouse={productionLineWarehouse}
+      {/* Factory Production Lines Dialog */}
+      <FactoryProductionLinesDialog
+        open={factoryLinesDialogOpen}
+        onOpenChange={handleFactoryLinesDialogClose}
+        factory={factoryForLines}
+        onLinesChanged={() => loadFactories(true)}
       />
     </>
   );
