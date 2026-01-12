@@ -28,8 +28,8 @@ export function LocationDetailDialog({
   const capacity = calculateCapacity(component);
   const currentCount = inventory?.total_items || 0; // Use row count instead of quantity
   const utilization = calculateUtilization(currentCount, capacity);
-  const utilizationColor = getUtilizationColor(utilization);
-  const utilizationStatus = getUtilizationStatus(utilization);
+  const utilizationColor = utilization !== null ? getUtilizationColor(utilization) : '#6b7280';
+  const utilizationStatus = utilization !== null ? getUtilizationStatus(utilization) : 'N/A';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -54,16 +54,18 @@ export function LocationDetailDialog({
             <ScrollArea className="h-full pr-4">
               <div className="space-y-6">
                 {/* Capacity Summary */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="rounded-lg border p-4">
-                    <div className="text-sm text-muted-foreground mb-1">Max Capacity</div>
-                    <div className="text-2xl font-bold">{capacity}</div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {component.type === 'rack'
-                        ? `${component.floors}F × ${component.rows} cells`
-                        : `${component.rows}R × ${component.cols}C`}
+                <div className={`grid gap-4 ${capacity !== null ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  {capacity !== null && (
+                    <div className="rounded-lg border p-4">
+                      <div className="text-sm text-muted-foreground mb-1">Max Capacity</div>
+                      <div className="text-2xl font-bold">{capacity}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {component.type === 'rack'
+                          ? `${component.floors}F × ${component.rows} cells`
+                          : `${component.rows}R × ${component.cols}C`}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="rounded-lg border p-4">
                     <div className="text-sm text-muted-foreground mb-1">Current Items</div>
@@ -73,35 +75,39 @@ export function LocationDetailDialog({
                     </div>
                   </div>
 
-                  <div className="rounded-lg border p-4">
-                    <div className="text-sm text-muted-foreground mb-1">Utilization</div>
-                    <div className="text-2xl font-bold" style={{ color: utilizationColor }}>
-                      {utilization.toFixed(1)}%
+                  {utilization !== null && (
+                    <div className="rounded-lg border p-4">
+                      <div className="text-sm text-muted-foreground mb-1">Utilization</div>
+                      <div className="text-2xl font-bold" style={{ color: utilizationColor }}>
+                        {utilization.toFixed(1)}%
+                      </div>
+                      <div className="text-xs mt-1">
+                        <Badge variant="outline" style={{ borderColor: utilizationColor, color: utilizationColor }}>
+                          {utilizationStatus}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="text-xs mt-1">
-                      <Badge variant="outline" style={{ borderColor: utilizationColor, color: utilizationColor }}>
-                        {utilizationStatus}
-                      </Badge>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
-                {/* Utilization Bar */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Space Utilization</span>
-                    <span className="font-medium">{currentCount} / {capacity}</span>
+                {/* Utilization Bar - only show if capacity is tracked */}
+                {capacity !== null && utilization !== null && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Space Utilization</span>
+                      <span className="font-medium">{currentCount} / {capacity}</span>
+                    </div>
+                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full transition-all"
+                        style={{
+                          width: `${Math.min(100, utilization)}%`,
+                          backgroundColor: utilizationColor,
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-3 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full transition-all"
-                      style={{
-                        width: `${Math.min(100, utilization)}%`,
-                        backgroundColor: utilizationColor,
-                      }}
-                    />
-                  </div>
-                </div>
+                )}
 
                 {/* Items List */}
                 {inventory && inventory.items.length > 0 ? (

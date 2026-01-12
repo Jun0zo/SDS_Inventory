@@ -511,7 +511,7 @@ CREATE INDEX IF NOT EXISTS idx_sap_plant ON public.sap_raw_rows(warehouse_code, 
 CREATE INDEX IF NOT EXISTS idx_sap_storage_location ON public.sap_raw_rows(warehouse_code, storage_location);
 CREATE INDEX IF NOT EXISTS idx_sap_split ON public.sap_raw_rows(warehouse_code, split_key) WHERE split_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_sap_fetched ON public.sap_raw_rows(fetched_at DESC);
-CREATE INDEX IF NOT EXISTS idx_sap_item_gen ON public.sap_raw_rows(warehouse_code, item_code);
+CREATE INDEX IF NOT EXISTS idx_sap_item_gen ON public.sap_raw_rows(warehouse_code, material);
 CREATE INDEX IF NOT EXISTS idx_sap_source_location_gen ON public.sap_raw_rows(warehouse_code, source_location_code);
 
 -- ============================================

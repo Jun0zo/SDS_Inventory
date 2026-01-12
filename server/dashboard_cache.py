@@ -73,7 +73,7 @@ class DashboardCacheManager:
             wms_data = wms_result.data or []
 
             # Get SAP data (warehouse_code column removed)
-            sap_query = supabase.table('sap_raw_rows').select('item_code, unrestricted_qty, quality_inspection_qty, blocked_qty, source_id')
+            sap_query = supabase.table('sap_raw_rows').select('material, unrestricted_qty, quality_inspection_qty, blocked_qty, source_id')
             sap_result = sap_query.execute()
             sap_data = sap_result.data or []
 
@@ -88,7 +88,7 @@ class DashboardCacheManager:
 
             # Get unique items
             wms_items = set(row.get('item_code') for row in wms_data if row.get('item_code'))
-            sap_items = set(row.get('sap_raw_rows', {}).get('item_code') for row in sap_data if row.get('item_code'))
+            sap_items = set(row.get('material') for row in sap_data if row.get('material'))
             unique_items = len(wms_items.union(sap_items))
 
             return {

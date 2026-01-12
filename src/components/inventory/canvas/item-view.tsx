@@ -4,7 +4,7 @@ import { cn } from '@/lib/cn';
 import { applyRotationWH } from '@/lib/geometry';
 import { LocationInventorySummary } from '@/store/useLocationInventoryStore';
 import { calculateCapacity, calculateUtilization, getUtilizationColor } from '@/lib/capacity';
-import { RefreshCw, Factory, Package } from 'lucide-react';
+import { RefreshCw, Package } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { Badge } from '@/components/ui/badge';
@@ -54,7 +54,7 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false, filterMo
   const capacity = calculateCapacity(item);
   const currentCount = inventory?.total_items || 0; // Use row count instead of quantity
   const utilization = calculateUtilization(currentCount, capacity);
-  const utilizationColor = getUtilizationColor(utilization);
+  const utilizationColor = utilization !== null ? getUtilizationColor(utilization) : '#6b7280';
 
   // Expected material status color
   const getExpectedMaterialColor = () => {
@@ -223,17 +223,21 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false, filterMo
                   {itemMetadata.unassigned_locations_count}
                 </Badge>
               )}
-              {/* Production Line Indicator */}
-              {itemMetadata?.production_line_count && itemMetadata.production_line_count > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="h-4 px-1 text-[9px] bg-blue-100 text-blue-700 flex items-center gap-0.5"
-                  title={`Feeds ${itemMetadata.production_line_count} production line${itemMetadata.production_line_count > 1 ? 's' : ''}`}
-                >
-                  <Factory className="h-2.5 w-2.5" />
-                  {itemMetadata.production_line_count}
-                </Badge>
-              )}
+              {/* Expected Material Indicator */}
+              <div
+                className="flex items-center gap-0.5"
+                title={
+                  itemMetadata?.expected_major_category
+                    ? `Expected: ${itemMetadata.expected_major_category}${itemMetadata.expected_minor_category ? ` / ${itemMetadata.expected_minor_category}` : ''}${itemMetadata.has_material_variance ? ' (불일치)' : ' (일치)'}`
+                    : 'Expected material 미설정'
+                }
+              >
+                <Package className="h-3 w-3" style={{ color: expectedMaterialColor }} />
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: expectedMaterialColor }}
+                />
+              </div>
             </div>
           </div>
 
@@ -254,18 +258,6 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false, filterMo
                   <span className="text-red-600">블락</span>
                   <span className="font-medium text-red-600">{inventory.stock_breakdown.blocked}</span>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {filterMode === 'production_line' && itemMetadata?.production_line_count && itemMetadata.production_line_count > 0 && (
-            <div className="mt-1 pt-1 border-t">
-              <div className="text-[10px] text-muted-foreground mb-1">생산 라인</div>
-              <div className="flex items-center gap-1">
-                <Factory className="h-3 w-3 text-blue-600" />
-                <span className="text-xs font-medium text-blue-600">
-                  {itemMetadata.production_line_count}개 라인 공급
-                </span>
               </div>
             </div>
           )}
@@ -301,25 +293,34 @@ export function ItemView({ item, onSelect, inventory, isDimmed = false, filterMo
           )}
 
           {/* Default: Show capacity/utilization when no filter is active */}
-          {filterMode === 'none' && capacity > 0 && item.zoneType !== 'block' && item.zoneType !== 'flex' && (
+          {filterMode === 'none' && item.zoneType !== 'block' && item.zoneType !== 'flex' && (
             <div className="mt-1 pt-1 border-t">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium" style={{ color: utilizationColor }}>
-                  {currentCount} / {capacity}
-                </span>
-              </div>
-              <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full transition-all"
-                  style={{
-                    width: `${Math.min(100, utilization)}%`,
-                    backgroundColor: utilizationColor,
-                  }}
-                />
-              </div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {utilization.toFixed(0)}%
-              </div>
+              {capacity !== null && utilization !== null ? (
+                <>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium" style={{ color: utilizationColor }}>
+                      {currentCount} / {capacity}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full transition-all"
+                      style={{
+                        width: `${Math.min(100, utilization)}%`,
+                        backgroundColor: utilizationColor,
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {utilization.toFixed(0)}%
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">현재 재고</span>
+                  <span className="font-medium">{currentCount} items</span>
+                </div>
+              )}
             </div>
           )}
         </div>

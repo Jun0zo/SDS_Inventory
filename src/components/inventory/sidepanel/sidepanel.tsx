@@ -300,8 +300,8 @@ export function SidePanel() {
   const capacity = calculateCapacity(selectedItem);
   // Calculate utilization using total items count (not cell count)
   const utilization = calculateUtilization(currentCount, capacity);
-  const utilizationColor = getUtilizationColor(utilization);
-  const utilizationStatus = getUtilizationStatus(utilization);
+  const utilizationColor = utilization !== null ? getUtilizationColor(utilization) : '#6b7280';
+  const utilizationStatus = utilization !== null ? getUtilizationStatus(utilization) : 'N/A';
 
   // Group inventory by lot_key (batch/lot) - count by number of rows, not quantity
   const getLotDistribution = (items: LocationInventoryItem[]) => {
@@ -390,34 +390,40 @@ export function SidePanel() {
                 
                 {/* Capacity Summary */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Max Capacity</span>
-                <span className="font-semibold">{capacity}</span>
-              </div>
+              {capacity !== null && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Max Capacity</span>
+                  <span className="font-semibold">{capacity}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Current Stock</span>
                 <span className="font-semibold">{currentCount}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Utilization</span>
-                <Badge variant="outline" style={{ borderColor: utilizationColor, color: utilizationColor }}>
-                  {utilization.toFixed(1)}% • {utilizationStatus}
-                </Badge>
-              </div>
+              {utilization !== null && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Utilization</span>
+                  <Badge variant="outline" style={{ borderColor: utilizationColor, color: utilizationColor }}>
+                    {utilization.toFixed(1)}% • {utilizationStatus}
+                  </Badge>
+                </div>
+              )}
             </div>
-            
-            {/* Utilization Bar */}
-            <div className="space-y-2">
-              <div className="h-3 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full transition-all"
-                  style={{
-                    width: `${Math.min(100, utilization)}%`,
-                    backgroundColor: utilizationColor,
-                  }}
-                />
+
+            {/* Utilization Bar - only show if capacity is tracked */}
+            {capacity !== null && utilization !== null && (
+              <div className="space-y-2">
+                <div className="h-3 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full transition-all"
+                    style={{
+                      width: `${Math.min(100, utilization)}%`,
+                      backgroundColor: utilizationColor,
+                    }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
             
             {/* Items Summary */}
             {inventory && (
