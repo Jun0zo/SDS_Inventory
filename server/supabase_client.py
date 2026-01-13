@@ -338,39 +338,131 @@ async def get_split_values_for_source(source_id: str, exclude_warehouse: Optiona
 # ============================================
 # PRODUCTION LINES FUNCTIONS
 # ============================================
+# FACTORY CRUD FUNCTIONS
+# ============================================
 
-async def get_production_lines(warehouse_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Get production lines, optionally filtered by warehouse via junction table.
+async def get_factories() -> List[Dict[str, Any]]:
+    """Get all factories with production line counts"""
+    if not supabase:
+        raise Exception("Supabase not configured")
 
-    If warehouse_id is provided, returns only production lines linked to that warehouse.
-    If warehouse_id is None, returns all production lines.
+    result = supabase.table('factories').select('*').order('created_at', desc=False).execute()
+
+    if not result.data:
+        return []
+
+    factories = []
+    for factory in result.data:
+        # Count production lines for this factory
+        lines_count = supabase.table('production_lines')\
+            .select('id', count='exact')\
+            .eq('factory_id', factory['id'])\
+            .execute()
+        factory['production_line_count'] = lines_count.count if lines_count.count else 0
+        factories.append(factory)
+
+    return factories
+
+
+async def get_factory(factory_id: str) -> Optional[Dict[str, Any]]:
+    """Get a single factory by ID"""
+    if not supabase:
+        raise Exception("Supabase not configured")
+
+    result = supabase.table('factories').select('*').eq('id', factory_id).execute()
+
+    if not result.data:
+        return None
+
+    factory = result.data[0]
+
+    # Count production lines
+    lines_count = supabase.table('production_lines')\
+        .select('id', count='exact')\
+        .eq('factory_id', factory_id)\
+        .execute()
+    factory['production_line_count'] = lines_count.count if lines_count.count else 0
+
+    return factory
+
+
+async def create_factory(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new factory"""
+    if not supabase:
+        raise Exception("Supabase not configured")
+
+    result = supabase.table('factories').insert(data).execute()
+
+    if not result.data:
+        raise Exception("Failed to create factory")
+
+    factory = result.data[0]
+    factory['production_line_count'] = 0
+    return factory
+
+
+async def update_factory(factory_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Update a factory"""
+    if not supabase:
+        raise Exception("Supabase not configured")
+
+    # Add updated_at timestamp
+    data['updated_at'] = 'now()'
+
+    result = supabase.table('factories').update(data).eq('id', factory_id).execute()
+
+    if not result.data:
+        raise Exception("Failed to update factory")
+
+    factory = result.data[0]
+
+    # Count production lines
+    lines_count = supabase.table('production_lines')\
+        .select('id', count='exact')\
+        .eq('factory_id', factory_id)\
+        .execute()
+    factory['production_line_count'] = lines_count.count if lines_count.count else 0
+
+    return factory
+
+
+async def delete_factory(factory_id: str) -> bool:
+    """Delete a factory (production lines will be deleted automatically due to CASCADE)"""
+    if not supabase:
+        raise Exception("Supabase not configured")
+
+    result = supabase.table('factories').delete().eq('id', factory_id).execute()
+
+    return len(result.data) > 0 if result.data else False
+
+
+# ============================================
+# PRODUCTION LINE CRUD FUNCTIONS
+# ============================================
+
+async def get_production_lines(factory_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get production lines, optionally filtered by factory.
+
+    If factory_id is provided, returns only production lines for that factory.
+    If factory_id is None, returns all production lines.
     """
     if not supabase:
         raise Exception("Supabase not configured")
 
-    if warehouse_id:
-        # Get production line IDs linked to this warehouse via junction table
-        links_result = supabase.table('warehouse_production_lines')\
-            .select('production_line_id')\
-            .eq('warehouse_id', warehouse_id)\
-            .execute()
-
-        if not links_result.data:
-            return []
-
-        line_ids = [link['production_line_id'] for link in links_result.data]
-
-        # Get production lines by IDs
+    if factory_id:
         lines_result = supabase.table('production_lines')\
             .select('*')\
-            .in_('id', line_ids)\
+            .eq('factory_id', factory_id)\
             .execute()
     else:
-        # Get all production lines
         lines_result = supabase.table('production_lines').select('*').execute()
 
     if not lines_result.data:
         return []
+
+    # Get all factory names for lookup
+    factories_result = supabase.table('factories').select('id, name').execute()
+    factory_names = {f['id']: f['name'] for f in factories_result.data} if factories_result.data else {}
 
     lines = []
     for line in lines_result.data:
@@ -381,12 +473,8 @@ async def get_production_lines(warehouse_id: Optional[str] = None) -> List[Dict[
             .execute()
         line['materials'] = materials_result.data if materials_result.data else []
 
-        # Get linked warehouse IDs via junction table
-        wpl_result = supabase.table('warehouse_production_lines')\
-            .select('warehouse_id')\
-            .eq('production_line_id', line['id'])\
-            .execute()
-        line['warehouse_ids'] = [wpl['warehouse_id'] for wpl in wpl_result.data] if wpl_result.data else []
+        # Add factory name
+        line['factory_name'] = factory_names.get(line.get('factory_id'), None)
 
         lines.append(line)
 
@@ -394,18 +482,17 @@ async def get_production_lines(warehouse_id: Optional[str] = None) -> List[Dict[
 
 
 async def get_all_production_lines() -> List[Dict[str, Any]]:
-    """Get all production lines with their materials and warehouse associations"""
-    return await get_production_lines(warehouse_id=None)
+    """Get all production lines with their materials"""
+    return await get_production_lines(factory_id=None)
 
 
 async def create_production_line(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Create a new production line with materials and warehouse associations"""
+    """Create a new production line with materials"""
     if not supabase:
         raise Exception("Supabase not configured")
 
-    # Extract materials and warehouse_ids from data
+    # Extract materials from data
     materials = data.pop('materials', [])
-    warehouse_ids = data.pop('warehouse_ids', [])
 
     # Create production line
     line_result = supabase.table('production_lines').insert(data).execute()
@@ -416,11 +503,12 @@ async def create_production_line(data: Dict[str, Any]) -> Dict[str, Any]:
     line = line_result.data[0]
     line_id = line['id']
 
-    # Create warehouse associations via junction table
-    if warehouse_ids:
-        wpl_data = [{'warehouse_id': wid, 'production_line_id': line_id} for wid in warehouse_ids]
-        supabase.table('warehouse_production_lines').insert(wpl_data).execute()
-    line['warehouse_ids'] = warehouse_ids
+    # Get factory name
+    if line.get('factory_id'):
+        factory_result = supabase.table('factories').select('name').eq('id', line['factory_id']).execute()
+        line['factory_name'] = factory_result.data[0]['name'] if factory_result.data else None
+    else:
+        line['factory_name'] = None
 
     # Create materials if any
     if materials:
@@ -454,43 +542,13 @@ async def create_production_line(data: Dict[str, Any]) -> Dict[str, Any]:
     return line
 
 
-async def link_production_line_to_warehouse(production_line_id: str, warehouse_id: str) -> bool:
-    """Link a production line to a warehouse"""
-    if not supabase:
-        raise Exception("Supabase not configured")
-
-    try:
-        result = supabase.table('warehouse_production_lines').insert({
-            'warehouse_id': warehouse_id,
-            'production_line_id': production_line_id
-        }).execute()
-        return len(result.data) > 0 if result.data else False
-    except Exception as e:
-        logger.error(f"Error linking production line to warehouse: {e}")
-        return False
-
-
-async def unlink_production_line_from_warehouse(production_line_id: str, warehouse_id: str) -> bool:
-    """Remove link between production line and warehouse"""
-    if not supabase:
-        raise Exception("Supabase not configured")
-
-    result = supabase.table('warehouse_production_lines')\
-        .delete()\
-        .eq('warehouse_id', warehouse_id)\
-        .eq('production_line_id', production_line_id)\
-        .execute()
-
-    return len(result.data) > 0 if result.data else False
-
 async def update_production_line(line_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
     """Update a production line and its materials"""
     if not supabase:
         raise Exception("Supabase not configured")
 
-    # Extract materials and warehouse_ids from data
+    # Extract materials from data
     materials = data.pop('materials', None)
-    warehouse_ids = data.pop('warehouse_ids', None)
 
     # Update production line (only if there's data to update)
     if data:
@@ -505,23 +563,12 @@ async def update_production_line(line_id: str, data: Dict[str, Any]) -> Dict[str
             raise Exception("Production line not found")
         line = line_result.data[0]
 
-    # Update warehouse associations if provided
-    if warehouse_ids is not None:
-        # Delete existing associations
-        supabase.table('warehouse_production_lines').delete().eq('production_line_id', line_id).execute()
-
-        # Insert new associations
-        if warehouse_ids:
-            wpl_data = [{'warehouse_id': wid, 'production_line_id': line_id} for wid in warehouse_ids]
-            supabase.table('warehouse_production_lines').insert(wpl_data).execute()
-        line['warehouse_ids'] = warehouse_ids
+    # Get factory name
+    if line.get('factory_id'):
+        factory_result = supabase.table('factories').select('name').eq('id', line['factory_id']).execute()
+        line['factory_name'] = factory_result.data[0]['name'] if factory_result.data else None
     else:
-        # Get current warehouse associations
-        wpl_result = supabase.table('warehouse_production_lines')\
-            .select('warehouse_id')\
-            .eq('production_line_id', line_id)\
-            .execute()
-        line['warehouse_ids'] = [wpl['warehouse_id'] for wpl in wpl_result.data] if wpl_result.data else []
+        line['factory_name'] = None
 
     # Update materials if provided
     if materials is not None:
@@ -558,6 +605,7 @@ async def update_production_line(line_id: str, data: Dict[str, Any]) -> Dict[str
         line['materials'] = materials_result.data if materials_result.data else []
 
     return line
+
 
 async def delete_production_line(line_id: str) -> bool:
     """Delete a production line (materials will be deleted automatically due to CASCADE)"""

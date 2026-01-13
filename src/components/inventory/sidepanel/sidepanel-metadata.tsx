@@ -11,13 +11,12 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ExpectedMaterialsForm } from './expected-materials-form';
 import { MaterialVarianceIndicator } from '../material-variance-indicator';
-import { ProductionLineLinks } from './production-line-links';
 import { MaterialRestrictionsEditor } from './material-restrictions-editor';
-import { Factory, Package, Layers } from 'lucide-react';
+import { Package, Layers } from 'lucide-react';
 import {
   getComponentMetadata,
 } from '@/lib/supabase/component-metadata';
-import type { ComponentMetadata } from '@/types/component-metadata';
+import type { ComponentMetadata, ExpectedMaterials } from '@/types/component-metadata';
 import type { RackItem, AnyItem } from '@/types/inventory';
 
 interface SidePanelMetadataProps {
@@ -25,13 +24,15 @@ interface SidePanelMetadataProps {
   warehouseId: string;
   isEditMode: boolean;
   item?: AnyItem; // Full item for advanced features
+  onExpectedMaterialsChange?: (itemId: string, expected: ExpectedMaterials) => void;  // Callback with itemId
 }
 
 export function SidePanelMetadata({
   itemId,
-  warehouseId,
+  warehouseId: _warehouseId,
   isEditMode,
   item,
+  onExpectedMaterialsChange,
 }: SidePanelMetadataProps) {
   const [metadata, setMetadata] = useState<ComponentMetadata | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,13 +49,14 @@ export function SidePanelMetadata({
     setLoading(false);
   };
 
-  const handleExpectedMaterialsChange = () => {
-    // Reload metadata to get updated variance status
-    loadMetadata();
+  const handleExpectedMaterialsChange = (targetItemId: string, expected: ExpectedMaterials) => {
+    // Pass changes up to parent with the correct itemId
+    onExpectedMaterialsChange?.(targetItemId, expected);
   };
 
-  const handleProductionLinksChange = () => {
-    // Reload metadata to get updated links
+  // For MaterialRestrictionsEditor which handles its own DB updates
+  const handleRestrictionsEditorUpdate = () => {
+    // Reload metadata to reflect changes
     loadMetadata();
   };
 
@@ -90,7 +92,7 @@ export function SidePanelMetadata({
           <CardContent>
             <MaterialRestrictionsEditor
               item={item as RackItem}
-              onUpdate={handleExpectedMaterialsChange}
+              onUpdate={handleRestrictionsEditorUpdate}
             />
           </CardContent>
         </Card>
@@ -111,8 +113,9 @@ export function SidePanelMetadata({
               currentExpected={{
                 major_category: metadata?.expected_major_category,
                 minor_category: metadata?.expected_minor_category,
+                item_codes: metadata?.expected_item_codes,
               }}
-              onSave={handleExpectedMaterialsChange}
+              onChange={handleExpectedMaterialsChange}
               isEditMode={isEditMode}
             />
           </CardContent>
@@ -137,28 +140,6 @@ export function SidePanelMetadata({
           mode="detailed"
         />
       )}
-
-      {/* Production Line Feeds */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Factory className="h-4 w-4" />
-            Production Line Feeds
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Production lines that consume materials from this location
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ProductionLineLinks
-            itemId={itemId}
-            warehouseId={warehouseId}
-            currentLinks={metadata?.production_line_feeds || []}
-            isEditMode={isEditMode}
-            onLinksChange={handleProductionLinksChange}
-          />
-        </CardContent>
-      </Card>
     </div>
   );
 }

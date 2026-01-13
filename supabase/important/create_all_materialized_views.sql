@@ -458,8 +458,7 @@ SELECT
   NOW() AS last_updated
 FROM joined_data
 -- Include both discrepancies and matches (diff_type determines the category)
-ORDER BY ABS(discrepancy) DESC
-LIMIT 1000;  -- Store top 1000 discrepancies and matches
+ORDER BY ABS(discrepancy) DESC;
 
 -- Create indexes on materialized view
 CREATE INDEX idx_inventory_discrepancies_mv_factory_location
@@ -1164,8 +1163,7 @@ ORDER BY
     ELSE 6
   END,
   valid_date ASC NULLS LAST,
-  available_qty DESC
-LIMIT 1000;  -- Increased limit to ensure we capture enough expiring items
+  available_qty DESC;
 
 -- Create indexes on materialized view
 CREATE INDEX idx_expiring_items_mv_factory_location
@@ -1224,8 +1222,7 @@ FROM public.wms_raw_rows
 WHERE split_key IS NOT NULL
   AND inb_date IS NOT NULL
   AND inb_date <= CURRENT_DATE - INTERVAL '60 days'  -- At least 60 days old
-ORDER BY inb_date ASC, available_qty DESC
-LIMIT 200;  -- Store top 200 slow-moving items
+ORDER BY inb_date ASC, available_qty DESC;
 
 -- Create indexes on materialized view
 CREATE INDEX idx_slow_moving_items_mv_factory_location

@@ -3,6 +3,7 @@ import { useZoneStore } from '@/store/useZoneStore';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, ChevronDown, ChevronRight, Copy } from 'lucide-react';
@@ -125,15 +126,29 @@ export function FlatForm({ item }: FlatFormProps) {
       </Collapsible>
 
 
-      <div>
-        <Label htmlFor="maxCapacity">Max Capacity</Label>
-        <Input
-          id="maxCapacity"
-          type="number"
-          min="0"
-          value={item.maxCapacity ?? 36}
-          onChange={(e) => handleUpdate({ maxCapacity: parseInt(e.target.value) || 0 })}
-        />
+      <div className="space-y-3">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="noCapacityLimit"
+            checked={item.noCapacityLimit ?? false}
+            onCheckedChange={(checked) => handleUpdate({ noCapacityLimit: checked === true })}
+          />
+          <Label htmlFor="noCapacityLimit" className="text-sm font-normal cursor-pointer">
+            No capacity limit (현재 개수만 표시)
+          </Label>
+        </div>
+        {!item.noCapacityLimit && (
+          <div>
+            <Label htmlFor="maxCapacity">Max Capacity</Label>
+            <Input
+              id="maxCapacity"
+              type="number"
+              min="0"
+              value={item.maxCapacity ?? 36}
+              onChange={(e) => handleUpdate({ maxCapacity: parseInt(e.target.value) || 0 })}
+            />
+          </div>
+        )}
       </div>
 
       <div className="border-t pt-4 space-y-2">

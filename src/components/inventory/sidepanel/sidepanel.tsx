@@ -1,6 +1,8 @@
 import { useZoneStore } from '@/store/useZoneStore';
 import { useWarehouseStore } from '@/store/useWarehouseStore';
 import { getZoneCapacities } from '@/lib/supabase/insights';
+import { updateComponentExpectedMaterials } from '@/lib/supabase/component-metadata';
+import type { ExpectedMaterials } from '@/types/component-metadata';
 import { useEffect, useState, useMemo } from 'react';
 import * as React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +28,23 @@ export function SidePanel() {
   const [rackGridViewOpen, setRackGridViewOpen] = useState(false);
   const [componentStockUpdates, setComponentStockUpdates] = useState<Record<string, number>>({});
   const [zoneCapacities, setZoneCapacities] = useState<any[]>([]);
+  // Handle expected materials changes by saving to DB immediately
+  // Uses the itemId from the callback to ensure we save to the correct item
+  // even if the selection has changed since the debounce started
+  const handleExpectedMaterialsChange = async (targetItemId: string, expected: ExpectedMaterials) => {
+    if (!targetItemId) return;
+
+    console.log('💾 [SidePanel] Saving expected materials for:', targetItemId, expected);
+
+    await updateComponentExpectedMaterials(
+      targetItemId,
+      {
+        major_category: expected.major_category,
+        minor_category: expected.minor_category,
+      },
+      expected.item_codes
+    );
+  };
 
   // Direct MV data (no cache)
   const [directMvData, setDirectMvData] = useState<any>(null);
@@ -300,8 +319,8 @@ export function SidePanel() {
   const capacity = calculateCapacity(selectedItem);
   // Calculate utilization using total items count (not cell count)
   const utilization = calculateUtilization(currentCount, capacity);
-  const utilizationColor = getUtilizationColor(utilization);
-  const utilizationStatus = getUtilizationStatus(utilization);
+  const utilizationColor = utilization !== null ? getUtilizationColor(utilization) : '#6b7280';
+  const utilizationStatus = utilization !== null ? getUtilizationStatus(utilization) : 'N/A';
 
   // Group inventory by lot_key (batch/lot) - count by number of rows, not quantity
   const getLotDistribution = (items: LocationInventoryItem[]) => {
@@ -390,34 +409,40 @@ export function SidePanel() {
                 
                 {/* Capacity Summary */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Max Capacity</span>
-                <span className="font-semibold">{capacity}</span>
-              </div>
+              {capacity !== null && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Max Capacity</span>
+                  <span className="font-semibold">{capacity}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Current Stock</span>
                 <span className="font-semibold">{currentCount}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Utilization</span>
-                <Badge variant="outline" style={{ borderColor: utilizationColor, color: utilizationColor }}>
-                  {utilization.toFixed(1)}% • {utilizationStatus}
-                </Badge>
-              </div>
+              {utilization !== null && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Utilization</span>
+                  <Badge variant="outline" style={{ borderColor: utilizationColor, color: utilizationColor }}>
+                    {utilization.toFixed(1)}% • {utilizationStatus}
+                  </Badge>
+                </div>
+              )}
             </div>
-            
-            {/* Utilization Bar */}
-            <div className="space-y-2">
-              <div className="h-3 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full transition-all"
-                  style={{
-                    width: `${Math.min(100, utilization)}%`,
-                    backgroundColor: utilizationColor,
-                  }}
-                />
+
+            {/* Utilization Bar - only show if capacity is tracked */}
+            {capacity !== null && utilization !== null && (
+              <div className="space-y-2">
+                <div className="h-3 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full transition-all"
+                    style={{
+                      width: `${Math.min(100, utilization)}%`,
+                      backgroundColor: utilizationColor,
+                    }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
             
             {/* Items Summary */}
             {inventory && (
@@ -655,6 +680,8 @@ export function SidePanel() {
               itemId={selectedItem.id}
               warehouseId={currentWarehouseId}
               isEditMode={isEditMode}
+              item={selectedItem}
+              onExpectedMaterialsChange={handleExpectedMaterialsChange}
             />
           )}
         </div>

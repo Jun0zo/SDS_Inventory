@@ -900,6 +900,74 @@ export async function getProductionLinesByIds(warehouseIds: string[]): Promise<A
 }
 
 /**
+ * Get production lines for a specific factory by factory ID
+ */
+export async function getProductionLinesByFactoryId(factoryId: string): Promise<Array<{
+  id: string;
+  name: string;
+  factory_id: string;
+  factory_name: string;
+  daily_production_capacity: number;
+  materials: Array<{
+    id: string;
+    material_code: string;
+    material_name: string;
+    quantity_per_unit: number;
+    unit: string;
+    material_group_id?: string;
+    is_primary?: boolean;
+    priority_in_group?: number;
+  }>;
+}>> {
+  try {
+    // Fetch production lines with materials for the given factory
+    const { data, error } = await supabase
+      .from('production_lines')
+      .select(`
+        id,
+        line_name,
+        factory_id,
+        daily_production_capacity,
+        factories!inner (
+          id,
+          name
+        ),
+        production_line_materials (
+          id,
+          material_code,
+          material_name,
+          quantity_per_unit,
+          unit,
+          material_group_id,
+          is_primary,
+          priority_in_group
+        )
+      `)
+      .eq('factory_id', factoryId);
+
+    if (error) {
+      console.warn('Error fetching production lines by factory:', error);
+      return [];
+    }
+
+    const productionLines = data?.map(line => ({
+      id: line.id,
+      name: line.line_name,
+      factory_id: line.factory_id,
+      factory_name: (line.factories as any)?.name || '',
+      daily_production_capacity: line.daily_production_capacity,
+      materials: line.production_line_materials || []
+    })) || [];
+
+    console.log('🏭 getProductionLinesByFactoryId: LOADED', { count: productionLines.length, factoryId });
+    return productionLines;
+  } catch (error) {
+    console.error('Error fetching production lines by factory:', error);
+    return [];
+  }
+}
+
+/**
  * Get material stock levels for warehouses
  */
 export async function getMaterialStock(warehouseCodes: string[]): Promise<Map<string, number>> {

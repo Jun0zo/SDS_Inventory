@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/alert-dialog';
 
 interface ProductionLineManagementProps {
-  warehouseId: string;
   productionLines: ProductionLine[];
   onAddLine: (line: Omit<ProductionLine, 'id' | 'created_at' | 'updated_at'>) => void;
   onUpdateLine: (id: string, line: Omit<ProductionLine, 'id' | 'created_at' | 'updated_at'>) => void;
@@ -26,7 +25,6 @@ interface ProductionLineManagementProps {
 }
 
 export function ProductionLineManagement({
-  warehouseId,
   productionLines,
   onAddLine,
   onUpdateLine,
@@ -225,7 +223,6 @@ export function ProductionLineManagement({
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         onSave={handleSave}
-        warehouseId={warehouseId}
         existingLine={editingLine}
       />
 

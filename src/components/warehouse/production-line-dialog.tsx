@@ -14,7 +14,7 @@ interface ProductionLineDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (line: Omit<ProductionLine, 'id' | 'created_at' | 'updated_at'>) => void;
-  warehouseId?: string; // Optional - if provided, line will be linked to this warehouse
+  factoryId?: string; // Required for new lines - the factory this line belongs to
   existingLine?: ProductionLine;
 }
 
@@ -22,7 +22,7 @@ export function ProductionLineDialog({
   open,
   onOpenChange,
   onSave,
-  warehouseId,
+  factoryId,
   existingLine
 }: ProductionLineDialogProps) {
   const [lineCode, setLineCode] = useState(existingLine?.line_code || '');
@@ -250,10 +250,8 @@ export function ProductionLineDialog({
       return;
     }
 
-    // Build warehouse_ids array - include current warehouseId if provided
-    const warehouseIdsToSave = warehouseId
-      ? [warehouseId, ...(existingLine?.warehouse_ids || []).filter(id => id !== warehouseId)]
-      : existingLine?.warehouse_ids || [];
+    // Use the factory_id from props or existing line
+    const factoryIdToSave = factoryId || existingLine?.factory_id || null;
 
     onSave({
       line_code: lineCode.trim(),
@@ -263,7 +261,7 @@ export function ProductionLineDialog({
       output_product_code: outputProductCode.trim() || null,
       output_product_name: outputProductName.trim() || null,
       materials: materials,
-      warehouse_ids: warehouseIdsToSave,
+      factory_id: factoryIdToSave,
       created_by: null,
     });
 
@@ -475,11 +473,8 @@ export function ProductionLineDialog({
                 </TableHeader>
                 <TableBody>
                   {organizedMaterials().flatMap((material) => {
-                    // Find the selected material to get category information
-                    const selectedMaterial = availableMaterials.find(m => m.code === material.material_code);
-                    const displayName = selectedMaterial?.majorCategory
-                      ? `(${selectedMaterial.majorCategory}) ${material.material_name}${selectedMaterial.minorCategory ? ` (${selectedMaterial.minorCategory})` : ''}`
-                      : material.material_name;
+                    // Display name without category prefix
+                    const displayName = material.material_name;
 
                     // Get category info for the current material
                     const currentMaterial = availableMaterials.find(m => m.code === material.material_code);

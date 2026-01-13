@@ -6,7 +6,7 @@
  * Supports mixed mode: category + item codes (OR logic)
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -18,13 +18,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Save, X, AlertCircle, Plus, Package, Tag } from 'lucide-react';
+import { Plus, Package, Tag, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { ExpectedMaterials } from '@/types/component-metadata';
 import {
   getMajorCategories,
   getMinorCategories,
-  updateComponentExpectedMaterials,
 } from '@/lib/supabase/component-metadata';
 
 // Extended interface to include item codes
@@ -36,8 +35,7 @@ interface ExpectedMaterialsFormProps {
   itemId: string;
   currentExpected?: ExpectedMaterialsWithCodes;
   currentItemCodes?: string[];
-  onSave?: (expected: ExpectedMaterialsWithCodes) => void;
-  onCancel?: () => void;
+  onChange?: (itemId: string, expected: ExpectedMaterialsWithCodes) => void;  // Now includes itemId
   isEditMode?: boolean;
 }
 
@@ -45,8 +43,7 @@ export function ExpectedMaterialsForm({
   itemId,
   currentExpected,
   currentItemCodes,
-  onSave,
-  onCancel,
+  onChange,
   isEditMode = false,
 }: ExpectedMaterialsFormProps) {
   const [majorCategory, setMajorCategory] = useState<string>(
@@ -61,8 +58,35 @@ export function ExpectedMaterialsForm({
   const [newItemCode, setNewItemCode] = useState('');
   const [majorCategories, setMajorCategories] = useState<string[]>([]);
   const [minorCategories, setMinorCategories] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Ref to track pending changes for flushing when item changes
+  const pendingChangesRef = useRef<{
+    itemId: string;
+    expected: ExpectedMaterialsWithCodes;
+  } | null>(null);
+  const prevItemIdRef = useRef<string>(itemId);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  // Flush pending changes and reset state when itemId changes
+  useEffect(() => {
+    // If switching to a different item, flush pending changes for previous item
+    if (prevItemIdRef.current !== itemId && pendingChangesRef.current) {
+      onChangeRef.current?.(
+        pendingChangesRef.current.itemId,
+        pendingChangesRef.current.expected
+      );
+      pendingChangesRef.current = null;
+    }
+    prevItemIdRef.current = itemId;
+
+    // Reset state for new item
+    setMajorCategory(currentExpected?.major_category || 'any');
+    setMinorCategory(currentExpected?.minor_category || 'any');
+    setItemCodes(currentItemCodes || currentExpected?.item_codes || []);
+    setIsInitialized(true);
+  }, [itemId, currentExpected?.major_category, currentExpected?.minor_category, currentExpected?.item_codes, currentItemCodes]);
 
   // Load major categories on mount
   useEffect(() => {
@@ -98,9 +122,10 @@ export function ExpectedMaterialsForm({
     setItemCodes(itemCodes.filter((c) => c !== code));
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    setError(null);
+  // Trigger onChange when values change (debounced to prevent excessive calls)
+  useEffect(() => {
+    // Only trigger onChange after initialization and when in edit mode
+    if (!isInitialized || !isEditMode) return;
 
     const expected: ExpectedMaterialsWithCodes = {
       major_category: majorCategory === 'any' ? undefined : majorCategory,
@@ -108,32 +133,19 @@ export function ExpectedMaterialsForm({
       item_codes: itemCodes.length > 0 ? itemCodes : undefined,
     };
 
-    const success = await updateComponentExpectedMaterials(itemId, expected, itemCodes);
+    // Store pending changes (will be flushed if item changes before debounce completes)
+    pendingChangesRef.current = { itemId, expected };
 
-    if (success) {
-      onSave?.(expected);
-    } else {
-      setError('Failed to save. Please try again.');
-    }
+    // Debounce to avoid excessive DB writes
+    const timer = setTimeout(() => {
+      onChange?.(itemId, expected);
+      pendingChangesRef.current = null;
+    }, 500); // 500ms debounce
 
-    setSaving(false);
-  };
-
-  const handleCancel = () => {
-    // Reset to current values
-    setMajorCategory(currentExpected?.major_category || 'any');
-    setMinorCategory(currentExpected?.minor_category || 'any');
-    setItemCodes(currentItemCodes || currentExpected?.item_codes || []);
-    setNewItemCode('');
-    setError(null);
-    onCancel?.();
-  };
+    return () => clearTimeout(timer);
+  }, [majorCategory, minorCategory, itemCodes, isInitialized, isEditMode, itemId, onChange]);
 
   const originalItemCodes = currentItemCodes || currentExpected?.item_codes || [];
-  const hasChanges =
-    majorCategory !== (currentExpected?.major_category || 'any') ||
-    minorCategory !== (currentExpected?.minor_category || 'any') ||
-    JSON.stringify(itemCodes.sort()) !== JSON.stringify(originalItemCodes.sort());
 
   // View-only mode
   if (!isEditMode) {
@@ -365,37 +377,6 @@ export function ExpectedMaterialsForm({
         </div>
       )}
 
-      {/* Error Message */}
-      {error && (
-        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-md dark:bg-red-950 dark:border-red-900">
-          <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
-          <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-        </div>
-      )}
-
-      {/* Action Buttons */}
-      {hasChanges && (
-        <div className="flex gap-2 pt-2">
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            size="sm"
-            className="flex-1"
-          >
-            <Save className="h-3.5 w-3.5 mr-1.5" />
-            {saving ? 'Saving...' : 'Save'}
-          </Button>
-          <Button
-            onClick={handleCancel}
-            disabled={saving}
-            variant="outline"
-            size="sm"
-          >
-            <X className="h-3.5 w-3.5 mr-1.5" />
-            Cancel
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

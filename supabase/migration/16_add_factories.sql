@@ -1,33 +1,65 @@
--- Migration: Add component metadata using existing items table
--- No new tables needed - just add columns to items and create MV
+-- ============================================
+-- 16. ADD FACTORIES TABLE
+-- ============================================
+-- This migration creates the factories table and migrates
+-- production lines from warehouse dependency to factory dependency.
 
--- ============================================================
--- 1. Add Columns to items Table
--- ============================================================
--- Add expected materials and production line feeds to items
-ALTER TABLE items
-  ADD COLUMN IF NOT EXISTS expected_major_category TEXT,
-  ADD COLUMN IF NOT EXISTS expected_minor_category TEXT,
-  ADD COLUMN IF NOT EXISTS feeds_production_line_ids UUID[];
+-- ============================================
+-- Step 1: Create factories table
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.factories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Indexes for new columns
-CREATE INDEX IF NOT EXISTS idx_items_expected_major
-  ON items(expected_major_category)
-  WHERE expected_major_category IS NOT NULL AND expected_major_category != 'any';
+-- Enable RLS
+ALTER TABLE public.factories ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX IF NOT EXISTS idx_items_feeds_production_lines
-  ON items USING GIN(feeds_production_line_ids)
-  WHERE feeds_production_line_ids IS NOT NULL;
+-- Create permissive RLS policy
+DROP POLICY IF EXISTS "factories_allow_all" ON public.factories;
+CREATE POLICY "factories_allow_all"
+  ON public.factories
+  FOR ALL
+  USING (true)
+  WITH CHECK (true);
 
--- Performance indexes for MV queries
-CREATE INDEX IF NOT EXISTS idx_items_warehouse_zone
-  ON items(warehouse_id, zone);
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_factories_code ON public.factories(code);
+CREATE INDEX IF NOT EXISTS idx_factories_created_at ON public.factories(created_at);
 
--- ============================================================
--- 2. Materialized View: Component Metadata
--- ============================================================
--- Pre-computes all metadata for fast querying
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_component_metadata AS
+-- ============================================
+-- Step 2: Add factory_id to production_lines
+-- ============================================
+ALTER TABLE public.production_lines
+  ADD COLUMN IF NOT EXISTS factory_id UUID REFERENCES public.factories(id) ON DELETE CASCADE;
+
+-- Create index for factory_id
+CREATE INDEX IF NOT EXISTS idx_production_lines_factory_id ON public.production_lines(factory_id);
+
+-- ============================================
+-- Step 3: Drop warehouse_production_lines junction table
+-- ============================================
+-- This table is no longer needed as production lines now belong to factories
+DROP TABLE IF EXISTS public.warehouse_production_lines CASCADE;
+
+-- ============================================
+-- Step 4: Update mv_component_metadata to handle factory
+-- ============================================
+-- Drop triggers first
+DROP TRIGGER IF EXISTS trigger_items_metadata_refresh ON items;
+DROP TRIGGER IF EXISTS trigger_wms_rows_metadata_refresh ON wms_raw_rows;
+DROP TRIGGER IF EXISTS trigger_materials_metadata_refresh ON materials;
+DROP TRIGGER IF EXISTS trigger_production_lines_metadata_refresh ON production_lines;
+
+-- Drop and recreate MV
+DROP MATERIALIZED VIEW IF EXISTS mv_component_metadata CASCADE;
+
+CREATE MATERIALIZED VIEW mv_component_metadata AS
 WITH actual_materials AS (
   SELECT
     i.id AS item_id,
@@ -72,7 +104,7 @@ production_line_feeds_agg AS (
       'production_line_id', pl.id,
       'line_code', pl.line_code,
       'line_name', pl.line_name,
-      'factory_name', f.name,
+      'factory_name', COALESCE(f.name, 'Unassigned'),
       'daily_capacity', pl.daily_production_capacity
     )) AS feeds
   FROM items i
@@ -90,7 +122,6 @@ SELECT
   -- Expected materials (from items table)
   i.expected_major_category,
   i.expected_minor_category,
-  i.expected_item_codes,
 
   -- Actual materials
   am.actual_major_categories,
@@ -130,80 +161,46 @@ LEFT JOIN unassigned_counts uc ON uc.item_id = i.id
 LEFT JOIN production_line_feeds_agg plf ON plf.item_id = i.id;
 
 -- Indexes for fast querying
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_component_metadata_item_id
+CREATE UNIQUE INDEX idx_mv_component_metadata_item_id
   ON mv_component_metadata(item_id);
-CREATE INDEX IF NOT EXISTS idx_mv_component_metadata_warehouse_zone
+CREATE INDEX idx_mv_component_metadata_warehouse_zone
   ON mv_component_metadata(warehouse_id, zone);
-CREATE INDEX IF NOT EXISTS idx_mv_component_metadata_variance
+CREATE INDEX idx_mv_component_metadata_variance
   ON mv_component_metadata(has_material_variance) WHERE has_material_variance = true;
-CREATE INDEX IF NOT EXISTS idx_mv_component_metadata_unassigned
+CREATE INDEX idx_mv_component_metadata_unassigned
   ON mv_component_metadata(has_unassigned_locations) WHERE has_unassigned_locations = true;
 
--- ============================================================
--- 3. Function to Refresh Component Metadata MV
--- ============================================================
--- Call this after updating items or periodically
-CREATE OR REPLACE FUNCTION refresh_component_metadata()
-RETURNS void AS $$
-BEGIN
-  REFRESH MATERIALIZED VIEW CONCURRENTLY mv_component_metadata;
-END;
-$$ LANGUAGE plpgsql;
-
--- ============================================================
--- 4. Trigger to Auto-Refresh MV
--- ============================================================
--- Trigger function to refresh MV when related data changes
-CREATE OR REPLACE FUNCTION trigger_refresh_component_metadata()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- Refresh materialized view (blocking operation within transaction)
-  PERFORM refresh_component_metadata();
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- Only refresh when metadata columns change
+-- Recreate triggers
 CREATE TRIGGER trigger_items_metadata_refresh
   AFTER UPDATE OF expected_major_category, expected_minor_category, feeds_production_line_ids ON items
   FOR EACH STATEMENT
   EXECUTE FUNCTION trigger_refresh_component_metadata();
 
--- Refresh when wms_raw_rows change (affects actual materials and unassigned counts)
 CREATE TRIGGER trigger_wms_rows_metadata_refresh
   AFTER INSERT OR UPDATE OR DELETE ON wms_raw_rows
   FOR EACH STATEMENT
   EXECUTE FUNCTION trigger_refresh_component_metadata();
 
--- Refresh when materials change (affects material categories)
 CREATE TRIGGER trigger_materials_metadata_refresh
   AFTER INSERT OR UPDATE OR DELETE ON materials
   FOR EACH STATEMENT
   EXECUTE FUNCTION trigger_refresh_component_metadata();
 
--- Refresh when production_lines change (affects production line feeds)
 CREATE TRIGGER trigger_production_lines_metadata_refresh
   AFTER INSERT OR UPDATE OR DELETE ON production_lines
   FOR EACH STATEMENT
   EXECUTE FUNCTION trigger_refresh_component_metadata();
 
--- Initial refresh
-SELECT refresh_component_metadata();
+-- ============================================
+-- Step 5: Add comments
+-- ============================================
+COMMENT ON TABLE public.factories IS 'Factory entities that own production lines';
+COMMENT ON COLUMN public.factories.code IS 'Unique factory code';
+COMMENT ON COLUMN public.factories.name IS 'Factory display name';
+COMMENT ON COLUMN public.factories.description IS 'Optional description';
+COMMENT ON COLUMN public.production_lines.factory_id IS 'Reference to factories table - the factory this production line belongs to';
 
--- ============================================================
--- Comments
--- ============================================================
-COMMENT ON COLUMN items.expected_major_category IS
-  'Expected major material category for this location. Use ''any'' for wildcard.';
-
-COMMENT ON COLUMN items.expected_minor_category IS
-  'Expected minor material category for this location. Use ''any'' for wildcard.';
-
-COMMENT ON COLUMN items.feeds_production_line_ids IS
-  'Array of production line UUIDs that this location supplies materials to.';
-
-COMMENT ON MATERIALIZED VIEW mv_component_metadata IS
-  'Pre-computed metadata for all components including materials, variance, unassigned locations, and production line feeds. Refreshed automatically via triggers when items table metadata columns change.';
-
-COMMENT ON FUNCTION refresh_component_metadata IS
-  'Refreshes the mv_component_metadata materialized view. Called automatically by triggers or manually for bulk operations.';
+-- ============================================
+-- Step 6: Refresh MV
+-- ============================================
+REFRESH MATERIALIZED VIEW mv_component_metadata;

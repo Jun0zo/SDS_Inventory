@@ -8,12 +8,19 @@ import { AnyItem } from '@/types/inventory';
 /**
  * Calculate maximum capacity of a component
  * For racks: uses cellCapacity[][] as the single source of truth
- * Block Zone and Flex Zone always return 0 (excluded from capacity calculations)
+ * Block Zone and Flex Zone always return null (excluded from capacity calculations)
+ * noCapacityLimit: true returns null (no capacity tracking)
+ * Returns null if capacity should not be tracked
  */
-export function calculateCapacity(item: AnyItem): number {
+export function calculateCapacity(item: AnyItem): number | null {
   // Block Zone and Flex Zone have no capacity (excluded from stats)
   if (item.zoneType === 'block' || item.zoneType === 'flex') {
-    return 0;
+    return null;
+  }
+
+  // No capacity limit set - don't track max capacity
+  if (item.noCapacityLimit) {
+    return null;
   }
 
   if (item.type === 'rack') {
@@ -40,9 +47,10 @@ export function calculateCapacity(item: AnyItem): number {
 
 /**
  * Calculate utilization percentage (can exceed 100%)
+ * Returns null if capacity is not tracked (null or 0)
  */
-export function calculateUtilization(currentQuantity: number, maxCapacity: number): number {
-  if (maxCapacity === 0) return 0;
+export function calculateUtilization(currentQuantity: number, maxCapacity: number | null): number | null {
+  if (maxCapacity === null || maxCapacity === 0) return null;
   return (currentQuantity / maxCapacity) * 100;
 }
 

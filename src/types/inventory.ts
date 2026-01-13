@@ -19,6 +19,8 @@ export interface PlacedItem {
   rotation?: number; // 0|90|180|270 for racks
   // Zone type: standard (normal), block (no capacity), flex (flexible area, no capacity)
   zoneType?: ZoneType | null;
+  // If true, max capacity is not tracked (shows current count only)
+  noCapacityLimit?: boolean;
   // Item-level expected materials (lowest priority)
   expected_major_category?: string | null;
   expected_minor_category?: string | null;

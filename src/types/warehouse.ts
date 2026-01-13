@@ -9,6 +9,18 @@ export type Warehouse = {
   created_at?: string;
 };
 
+// Factory (공장) - Production Lines의 소유자
+export type Factory = {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  production_line_count: number; // Computed field - number of production lines
+  created_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 // Production Line Material (BOM - Bill of Materials)
 export type ProductionLineMaterial = {
   id: string;
@@ -25,7 +37,8 @@ export type ProductionLineMaterial = {
 // Production Line
 export type ProductionLine = {
   id: string;
-  // warehouse_id removed - now using junction table warehouse_production_lines
+  factory_id?: string | null; // Reference to factories table
+  factory_name?: string | null; // Computed field - factory name
   line_code: string;
   line_name: string;
   line_count: number; // 라인 수 (항상 1)
@@ -33,7 +46,6 @@ export type ProductionLine = {
   output_product_code?: string | null; // 생산되는 제품 코드 (선택사항)
   output_product_name?: string | null; // 생산되는 제품명 (선택사항)
   materials: ProductionLineMaterial[]; // BOM (Bill of Materials)
-  warehouse_ids: string[]; // Connected warehouse IDs via junction table
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;

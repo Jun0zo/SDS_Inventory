@@ -16,6 +16,7 @@
 export interface ExpectedMaterials {
   major_category?: string;  // e.g., 'Electronics', 'Chemicals', or 'any'
   minor_category?: string;  // e.g., 'CPU', 'Resistor', or 'any'
+  item_codes?: string[];    // e.g., ['ITEM-001', 'ITEM-002'] - specific allowed item codes
 }
 
 /**
@@ -87,6 +88,7 @@ export interface ComponentMetadata {
   // Expected materials
   expected_major_category?: string;
   expected_minor_category?: string;
+  expected_item_codes?: string[];  // ✅ ADDED: Specific allowed item codes
 
   // Material variance
   has_material_variance: boolean;
@@ -159,6 +161,7 @@ export interface GetComponentMetadataResponse {
   zone: string;
   expected_major_category: string | null;
   expected_minor_category: string | null;
+  expected_item_codes: string[] | null;  // ✅ ADDED
   has_material_variance: boolean;
   actual_major_categories: string[] | null;
   actual_minor_categories: string[] | null;

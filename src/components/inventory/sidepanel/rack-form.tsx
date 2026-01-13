@@ -3,6 +3,7 @@ import { useZoneStore } from '@/store/useZoneStore';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -153,15 +154,29 @@ export function RackForm({ item }: RackFormProps) {
       </div>
 
 
-      <div>
-        <Label htmlFor="totalMaxCapacity">Total Max Capacity (Auto-calculated from grid)</Label>
-        <Input
-          id="totalMaxCapacity"
-          type="number"
-          value={calculateCapacity(item)}
-          readOnly
-          className="bg-muted"
-        />
+      <div className="space-y-3">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="noCapacityLimit"
+            checked={item.noCapacityLimit ?? false}
+            onCheckedChange={(checked) => handleUpdate({ noCapacityLimit: checked === true })}
+          />
+          <Label htmlFor="noCapacityLimit" className="text-sm font-normal cursor-pointer">
+            No capacity limit (현재 개수만 표시)
+          </Label>
+        </div>
+        {!item.noCapacityLimit && (
+          <div>
+            <Label htmlFor="totalMaxCapacity">Total Max Capacity (Auto-calculated from grid)</Label>
+            <Input
+              id="totalMaxCapacity"
+              type="number"
+              value={calculateCapacity(item) ?? 0}
+              readOnly
+              className="bg-muted"
+            />
+          </div>
+        )}
       </div>
 
       <div className="border-t pt-4 space-y-2">
