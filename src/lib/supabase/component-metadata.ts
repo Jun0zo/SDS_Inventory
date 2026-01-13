@@ -334,6 +334,7 @@ export async function getComponentMetadata(
       zone: data.zone,
       expected_major_category: data.expected_major_category || undefined,
       expected_minor_category: data.expected_minor_category || undefined,
+      expected_item_codes: data.expected_item_codes || undefined,  // ✅ ADDED
       has_material_variance: data.has_material_variance || false,
       actual_major_categories: data.actual_major_categories || [],
       actual_minor_categories: data.actual_minor_categories || [],

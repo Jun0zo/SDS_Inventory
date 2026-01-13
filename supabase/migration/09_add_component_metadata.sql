@@ -72,13 +72,13 @@ production_line_feeds_agg AS (
       'production_line_id', pl.id,
       'line_code', pl.line_code,
       'line_name', pl.line_name,
-      'factory_name', wh.name,
+      'factory_name', f.name,
       'daily_capacity', pl.daily_production_capacity
     )) AS feeds
   FROM items i
   CROSS JOIN LATERAL unnest(COALESCE(i.feeds_production_line_ids, ARRAY[]::UUID[])) AS line_id
   JOIN production_lines pl ON pl.id = line_id
-  JOIN warehouses wh ON wh.id = pl.warehouse_id
+  LEFT JOIN factories f ON f.id = pl.factory_id
   GROUP BY i.id
 )
 SELECT
@@ -90,6 +90,7 @@ SELECT
   -- Expected materials (from items table)
   i.expected_major_category,
   i.expected_minor_category,
+  i.expected_item_codes,
 
   -- Actual materials
   am.actual_major_categories,

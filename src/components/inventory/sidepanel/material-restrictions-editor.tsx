@@ -26,12 +26,14 @@ import type { RackItem, MaterialRestriction } from '@/types/inventory';
 import {
   getMajorCategories,
   getMinorCategories,
+  updateComponentExpectedMaterials,
 } from '@/lib/supabase/component-metadata';
 import {
   updateFloorMaterialRestrictions,
   updateCellMaterialRestrictions,
 } from '@/lib/supabase/material-capacities';
 import { ExpectedMaterialsForm } from './expected-materials-form';
+import type { ExpectedMaterials } from '@/types/component-metadata';
 
 interface MaterialRestrictionsEditorProps {
   item: RackItem;
@@ -151,8 +153,18 @@ export function MaterialRestrictionsEditor({
               major_category: item.expected_major_category || undefined,
               minor_category: item.expected_minor_category || undefined,
             }}
-            onSave={onUpdate}
-            onCancel={onCancel}
+            onChange={async (targetItemId: string, expected: ExpectedMaterials & { item_codes?: string[] }) => {
+              // Save item-level expected materials directly
+              await updateComponentExpectedMaterials(
+                targetItemId,
+                {
+                  major_category: expected.major_category,
+                  minor_category: expected.minor_category,
+                },
+                expected.item_codes
+              );
+              onUpdate?.();
+            }}
             isEditMode={true}
           />
         </TabsContent>

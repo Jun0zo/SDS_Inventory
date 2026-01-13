@@ -1,6 +1,8 @@
 import { useZoneStore } from '@/store/useZoneStore';
 import { useWarehouseStore } from '@/store/useWarehouseStore';
 import { getZoneCapacities } from '@/lib/supabase/insights';
+import { updateComponentExpectedMaterials } from '@/lib/supabase/component-metadata';
+import type { ExpectedMaterials } from '@/types/component-metadata';
 import { useEffect, useState, useMemo } from 'react';
 import * as React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +28,23 @@ export function SidePanel() {
   const [rackGridViewOpen, setRackGridViewOpen] = useState(false);
   const [componentStockUpdates, setComponentStockUpdates] = useState<Record<string, number>>({});
   const [zoneCapacities, setZoneCapacities] = useState<any[]>([]);
+  // Handle expected materials changes by saving to DB immediately
+  // Uses the itemId from the callback to ensure we save to the correct item
+  // even if the selection has changed since the debounce started
+  const handleExpectedMaterialsChange = async (targetItemId: string, expected: ExpectedMaterials) => {
+    if (!targetItemId) return;
+
+    console.log('💾 [SidePanel] Saving expected materials for:', targetItemId, expected);
+
+    await updateComponentExpectedMaterials(
+      targetItemId,
+      {
+        major_category: expected.major_category,
+        minor_category: expected.minor_category,
+      },
+      expected.item_codes
+    );
+  };
 
   // Direct MV data (no cache)
   const [directMvData, setDirectMvData] = useState<any>(null);
@@ -661,6 +680,8 @@ export function SidePanel() {
               itemId={selectedItem.id}
               warehouseId={currentWarehouseId}
               isEditMode={isEditMode}
+              item={selectedItem}
+              onExpectedMaterialsChange={handleExpectedMaterialsChange}
             />
           )}
         </div>
