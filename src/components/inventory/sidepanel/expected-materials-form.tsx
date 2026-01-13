@@ -86,7 +86,7 @@ export function ExpectedMaterialsForm({
     setMinorCategory(currentExpected?.minor_category || 'any');
     setItemCodes(currentItemCodes || currentExpected?.item_codes || []);
     setIsInitialized(true);
-  }, [itemId, currentExpected?.major_category, currentExpected?.minor_category, currentItemCodes]);
+  }, [itemId, currentExpected?.major_category, currentExpected?.minor_category, currentExpected?.item_codes, currentItemCodes]);
 
   // Load major categories on mount
   useEffect(() => {
