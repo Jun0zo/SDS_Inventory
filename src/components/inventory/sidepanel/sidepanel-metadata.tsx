@@ -35,7 +35,6 @@ export function SidePanelMetadata({
   onExpectedMaterialsChange,
 }: SidePanelMetadataProps) {
   const [metadata, setMetadata] = useState<ComponentMetadata | null>(null);
-  const [loading, setLoading] = useState(true);  // Start with true to wait for initial load
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   // Load metadata when item changes
@@ -44,10 +43,8 @@ export function SidePanelMetadata({
   }, [itemId]);
 
   const loadMetadata = async () => {
-    setLoading(true);
     const data = await getComponentMetadata(itemId);
     setMetadata(data);
-    setLoading(false);
     setInitialLoadComplete(true);
   };
 
