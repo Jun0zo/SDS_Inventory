@@ -116,5 +116,44 @@ export async function refreshLayoutMaterializedViews(): Promise<MVRefreshResult[
   const zoneResult = await refreshMaterializedView('zone_capacities_mv');
   results.push(zoneResult);
 
+  // Step 3: Refresh material category capacities MV
+  // This is needed after layout changes that modify expected materials
+  const materialResult = await refreshMaterialCategoryCapacitiesMV();
+  results.push(materialResult);
+
   return results;
+}
+
+/**
+ * Refresh material category capacities materialized view
+ * Called after layout saves to update expected material configurations
+ */
+export async function refreshMaterialCategoryCapacitiesMV(): Promise<MVRefreshResult> {
+  try {
+    const startTime = Date.now();
+    const { error } = await supabase.rpc('refresh_material_category_capacities');
+
+    if (error) {
+      console.error('Failed to refresh mv_material_category_capacities:', error);
+      return {
+        view: 'mv_material_category_capacities',
+        status: 'error',
+        error: error.message,
+      };
+    }
+
+    const duration = (Date.now() - startTime) / 1000;
+    return {
+      view: 'mv_material_category_capacities',
+      status: 'success',
+      duration_seconds: duration,
+    };
+  } catch (error) {
+    console.error('Error refreshing mv_material_category_capacities:', error);
+    return {
+      view: 'mv_material_category_capacities',
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 }

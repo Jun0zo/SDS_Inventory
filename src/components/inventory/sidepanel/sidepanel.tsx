@@ -36,6 +36,7 @@ export function SidePanel() {
 
     console.log('💾 [SidePanel] Saving expected materials for:', targetItemId, expected);
 
+    // 1. Save to DB
     await updateComponentExpectedMaterials(
       targetItemId,
       {
@@ -44,6 +45,15 @@ export function SidePanel() {
       },
       expected.item_codes
     );
+
+    // 2. Also update Zustand store so changes are preserved when "Save Layout" is clicked
+    // Without this, the in-memory items array doesn't have the expected materials changes,
+    // and they get lost when createOrUpdateLayout() deletes and re-inserts all items
+    updateItem(targetItemId, {
+      expected_major_category: expected.major_category || null,
+      expected_minor_category: expected.minor_category || null,
+      expected_item_codes: expected.item_codes || null,
+    });
   };
 
   // Direct MV data (no cache)

@@ -35,7 +35,8 @@ export function SidePanelMetadata({
   onExpectedMaterialsChange,
 }: SidePanelMetadataProps) {
   const [metadata, setMetadata] = useState<ComponentMetadata | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);  // Start with true to wait for initial load
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   // Load metadata when item changes
   useEffect(() => {
@@ -47,6 +48,7 @@ export function SidePanelMetadata({
     const data = await getComponentMetadata(itemId);
     setMetadata(data);
     setLoading(false);
+    setInitialLoadComplete(true);
   };
 
   const handleExpectedMaterialsChange = (targetItemId: string, expected: ExpectedMaterials) => {
@@ -60,7 +62,9 @@ export function SidePanelMetadata({
     loadMetadata();
   };
 
-  if (loading && !metadata) {
+  // Wait for initial load to complete before rendering form
+  // This prevents the form from saving empty values before metadata is loaded
+  if (!initialLoadComplete) {
     return (
       <div className="space-y-4">
         <Card>
