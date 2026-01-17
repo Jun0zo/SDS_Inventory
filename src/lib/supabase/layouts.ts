@@ -153,6 +153,10 @@ export async function getLayoutByWarehouseZone(
       w: dbItem.w,
       h: dbItem.h,
       zoneType: dbItem.zone_type || 'standard',
+      // Expected materials (item-level)
+      expected_major_category: dbItem.expected_major_category || undefined,
+      expected_minor_category: dbItem.expected_minor_category || undefined,
+      expected_item_codes: dbItem.expected_item_codes || undefined,
     };
 
     if (dbItem.type === 'rack') {
@@ -197,6 +201,11 @@ export async function getLayoutByWarehouseZone(
         cellAvailability: migratedCellAvailability || undefined,
         cellCapacity: migratedCellCapacity || undefined,
         pillarAvailability: dbItem.pillar_availability || undefined,
+        // Floor/cell level material restrictions
+        floorMaterialRestrictions: dbItem.floor_material_restrictions || undefined,
+        cellMaterialRestrictions: dbItem.cell_material_restrictions || undefined,
+        floorItemCodes: dbItem.floor_item_codes || undefined,
+        cellItemCodes: dbItem.cell_item_codes || undefined,
       } as AnyItem;
     } else {
       return {
@@ -314,6 +323,10 @@ export async function createOrUpdateLayout(params: {
         rows: item.rows,
         cols: item.type === 'flat' ? (item as any).cols : item.rows, // For flat items, keep cols; for rack, store rows as cols for DB compatibility
         zone_type: item.zoneType || 'standard',
+        // Expected materials (item-level)
+        expected_major_category: item.expected_major_category || null,
+        expected_minor_category: item.expected_minor_category || null,
+        expected_item_codes: item.expected_item_codes || null,
       };
 
       if (item.type === 'rack') {
@@ -347,6 +360,11 @@ export async function createOrUpdateLayout(params: {
           cell_availability: item.cellAvailability || null,
           cell_capacity: cellCapacity,
           pillar_availability: item.pillarAvailability || null,
+          // Floor/cell level material restrictions
+          floor_material_restrictions: item.floorMaterialRestrictions || null,
+          cell_material_restrictions: item.cellMaterialRestrictions || null,
+          floor_item_codes: item.floorItemCodes || null,
+          cell_item_codes: item.cellItemCodes || null,
         };
       }
 
@@ -728,6 +746,10 @@ export async function getLayoutByZone(zoneCode: string): Promise<{ layout: Layou
       w: dbItem.w,
       h: dbItem.h,
       zoneType: dbItem.zone_type || 'standard',
+      // Expected materials (item-level)
+      expected_major_category: dbItem.expected_major_category || undefined,
+      expected_minor_category: dbItem.expected_minor_category || undefined,
+      expected_item_codes: dbItem.expected_item_codes || undefined,
     };
 
     if (dbItem.type === 'rack') {
@@ -768,6 +790,11 @@ export async function getLayoutByZone(zoneCode: string): Promise<{ layout: Layou
         cellAvailability: migratedCellAvailability || undefined,
         cellCapacity: migratedCellCapacity || undefined,
         pillarAvailability: dbItem.pillar_availability || undefined,
+        // Floor/cell level material restrictions
+        floorMaterialRestrictions: dbItem.floor_material_restrictions || undefined,
+        cellMaterialRestrictions: dbItem.cell_material_restrictions || undefined,
+        floorItemCodes: dbItem.floor_item_codes || undefined,
+        cellItemCodes: dbItem.cell_item_codes || undefined,
       } as AnyItem;
     } else {
       return {

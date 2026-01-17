@@ -69,10 +69,18 @@ export function ExpectedMaterialsForm({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  // Flush pending changes and reset state when itemId changes
+  // Store initial values to compare against for change detection
+  const initialValuesRef = useRef<{
+    majorCategory: string;
+    minorCategory: string;
+    itemCodes: string[];
+  } | null>(null);
+
+  // Flush pending changes when itemId changes
   useEffect(() => {
     // If switching to a different item, flush pending changes for previous item
     if (prevItemIdRef.current !== itemId && pendingChangesRef.current) {
+      console.log('🔄 [ExpectedMaterialsForm] Flushing pending changes for previous item:', pendingChangesRef.current.itemId);
       onChangeRef.current?.(
         pendingChangesRef.current.itemId,
         pendingChangesRef.current.expected
@@ -80,11 +88,40 @@ export function ExpectedMaterialsForm({
       pendingChangesRef.current = null;
     }
     prevItemIdRef.current = itemId;
+  }, [itemId]);
 
+  // Flush pending changes on unmount (separate effect to avoid issues with other dependencies)
+  useEffect(() => {
+    return () => {
+      if (pendingChangesRef.current) {
+        console.log('🔄 [ExpectedMaterialsForm] Flushing pending changes on unmount:', pendingChangesRef.current.itemId);
+        onChangeRef.current?.(
+          pendingChangesRef.current.itemId,
+          pendingChangesRef.current.expected
+        );
+        pendingChangesRef.current = null;
+      }
+    };
+  }, []);
+
+  // Reset state when itemId or currentExpected changes
+  useEffect(() => {
     // Reset state for new item
-    setMajorCategory(currentExpected?.major_category || 'any');
-    setMinorCategory(currentExpected?.minor_category || 'any');
-    setItemCodes(currentItemCodes || currentExpected?.item_codes || []);
+    const initMajor = currentExpected?.major_category || 'any';
+    const initMinor = currentExpected?.minor_category || 'any';
+    const initCodes = currentItemCodes || currentExpected?.item_codes || [];
+
+    setMajorCategory(initMajor);
+    setMinorCategory(initMinor);
+    setItemCodes(initCodes);
+
+    // Store initial values for change detection
+    initialValuesRef.current = {
+      majorCategory: initMajor,
+      minorCategory: initMinor,
+      itemCodes: initCodes,
+    };
+
     setIsInitialized(true);
   }, [itemId, currentExpected?.major_category, currentExpected?.minor_category, currentExpected?.item_codes, currentItemCodes]);
 
@@ -126,6 +163,19 @@ export function ExpectedMaterialsForm({
   useEffect(() => {
     // Only trigger onChange after initialization and when in edit mode
     if (!isInitialized || !isEditMode) return;
+
+    // Check if values have actually changed from initial values
+    const initial = initialValuesRef.current;
+    if (!initial) return;
+
+    const hasChanged =
+      majorCategory !== initial.majorCategory ||
+      minorCategory !== initial.minorCategory ||
+      itemCodes.length !== initial.itemCodes.length ||
+      itemCodes.some((code, i) => code !== initial.itemCodes[i]);
+
+    // Don't call onChange if nothing has changed (prevents overwriting with empty values on initial load)
+    if (!hasChanged) return;
 
     const expected: ExpectedMaterialsWithCodes = {
       major_category: majorCategory === 'any' ? undefined : majorCategory,

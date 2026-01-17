@@ -36,7 +36,7 @@ export function Sidebar({ collapsed, onCollapse, isMobile = false }: SidebarProp
     <aside
       className={cn(
         'flex flex-col border-r bg-card transition-all duration-300',
-        collapsed && !isMobile ? 'w-16' : 'w-64',
+        collapsed && !isMobile ? 'w-16' : 'w-52',
         isMobile && 'h-full'
       )}
     >

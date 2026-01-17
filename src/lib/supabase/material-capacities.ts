@@ -276,6 +276,68 @@ export async function updateCellMaterialRestrictions(
 }
 
 /**
+ * Update floor-level item codes for an item
+ * Automatically refreshes MV via trigger
+ * @param itemId - Item UUID
+ * @param itemCodes - Array of item code arrays per floor (null = no restriction)
+ * @returns Success status
+ */
+export async function updateFloorItemCodes(
+  itemId: string,
+  itemCodes: (string[] | null)[]
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("items")
+      .update({
+        floor_item_codes: itemCodes,
+      })
+      .eq("id", itemId);
+
+    if (error) {
+      console.error("Failed to update floor item codes:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error updating floor item codes:", error);
+    return false;
+  }
+}
+
+/**
+ * Update cell-level item codes for an item
+ * Automatically refreshes MV via trigger
+ * @param itemId - Item UUID
+ * @param itemCodes - 2D array of item code arrays [floor][cell] (null = no restriction)
+ * @returns Success status
+ */
+export async function updateCellItemCodes(
+  itemId: string,
+  itemCodes: (string[] | null)[][]
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("items")
+      .update({
+        cell_item_codes: itemCodes,
+      })
+      .eq("id", itemId);
+
+    if (error) {
+      console.error("Failed to update cell item codes:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error updating cell item codes:", error);
+    return false;
+  }
+}
+
+/**
  * Clear all material restrictions for an item (floor and cell level)
  * @param itemId - Item UUID
  * @returns Success status
@@ -287,6 +349,8 @@ export async function clearMaterialRestrictions(itemId: string): Promise<boolean
       .update({
         floor_material_restrictions: null,
         cell_material_restrictions: null,
+        floor_item_codes: null,
+        cell_item_codes: null,
       })
       .eq("id", itemId);
 

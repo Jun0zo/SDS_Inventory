@@ -1253,6 +1253,7 @@ export function DashboardPage() {
         {hasSelection && selectedWarehouseIds.length > 0 && (
           <div className="grid gap-4">
             <MaterialCapacitySummary
+              key={`material-capacity-${dataVersion}`}
               warehouseId={selectedWarehouseIds[0]}
               showTitle={true}
             />
